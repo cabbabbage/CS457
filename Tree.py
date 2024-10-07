@@ -45,4 +45,5 @@ class Tree:
         return self.img
 
     def activate(self):
-        self.active = True
+        if random.randint(0,1000) == 99:
+            self.active = True
