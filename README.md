@@ -95,6 +95,24 @@ The objective of this project is to utilize **MediaPipe** to detect player contr
 - Gesture recognition via **MediaPipe** will be sufficiently accurate for basic game controls.
 
 ---
+## Server and Client implementation:
+1. **Server Socket Creation:**:
+   - The Server utilizes the TCP Socket to listen for connecting clients.
+
+2. **Handling Client Connections:**:
+   - When a client connects to the server it spawns a new thread and using the handle_client Method
+     
+4. **Game State Communication:**:
+   - To communicate  game state the server prepares the relevant information as a JSON and then sends it to the client using the socket connection
+     
+5. **Client Socket Creation:**:
+   - The client is able to connect be specificing the host and port used.
+
+6. **User Interaction**:
+   - The user is able to input messages and send them to the server, or exit if needed
+   - The server will then receive the message and alter the game state
+
+---
 
 ## Roles and Responsibilities:
 
