@@ -2,9 +2,11 @@ import numpy as np
 from hitbox import Hitbox
 from pygame.locals import *
 from images import *
+import socket
+import json
 
 class Bike:
-    def __init__(self, width, height, client_socket):
+    def __init__(self, width, height, client_socket, addr):
         self.active = True
         self.type = "bike"
         self.img = bike
@@ -16,11 +18,12 @@ class Bike:
         self.score = 0
         self.width = width
         self.height = height
+        self.client_ip = addr
 
     def update(self):
         # Get body angle and shoulder length from TCP data
         self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
-        
+
         if self.standard_shoulders is None:
             self.standard_shoulders = new_shoulders
         else:
@@ -30,6 +33,7 @@ class Bike:
 
         self.x += self.body_angle
         self.x = max(min(self.x, self.width - 70), 0)
+        
         self.get_hitbox()
 
     def get_hitbox(self):
@@ -63,7 +67,6 @@ class Bike:
                 return angle_degrees, shoulder_length
         except (socket.error, json.JSONDecodeError, ValueError):
             # If any error occurs, fallback to previous values
-            print("Error receiving or parsing data, using last angle and standard shoulders.")
             return last_angle, standard_shoulders
 
     def get_position(self):

@@ -10,8 +10,7 @@ class Rabbit:
         self.game_width = width
         self.type = "rabbit"
         self.rnd_start()
-        rabbits = [rabbit]
-        self.img = random.choice(rabbits)
+        self.img = rabbit
         self.active = False
 
     def get_position(self):
@@ -20,7 +19,7 @@ class Rabbit:
     def rnd_start(self):
         self.side = random.choice(["left", "right"])
         self.x = -50 if self.side == "left" else self.game_width + 50
-        self.y = random.randint(-1000, 100)
+        self.y = random.randint(-100, 100)
         print(f"Rabbit starting at: {self.x}, {self.y} (side: {self.side})")
 
     def update(self):
@@ -32,7 +31,6 @@ class Rabbit:
         self.get_hitbox()
 
     def get_hitbox(self):
-        # Rabbit-specific hitbox adjustments
         self.hitbox_top, self.hitbox_bottom, self.hitbox_left, self.hitbox_right = Hitbox.calculate_hitbox(
             self.img, self.x, self.y, width_adjust=0, height_adjust=-25)
 
@@ -46,4 +44,5 @@ class Rabbit:
         return self.img
 
     def activate(self):
-        self.active = True
+        if random.randint(0,100) == 99:
+            self.active = True
