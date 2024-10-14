@@ -6,7 +6,7 @@ import socket
 import json
 
 class Bike:
-    def __init__(self, width, height, client_socket):
+    def __init__(self, width, height, client_socket, addr):
         self.active = True
         self.type = "bike"
         self.img = bike
@@ -18,6 +18,7 @@ class Bike:
         self.score = 0
         self.width = width
         self.height = height
+        self.client_ip = addr
 
     def update(self):
         # Get body angle and shoulder length from TCP data
