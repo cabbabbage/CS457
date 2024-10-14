@@ -12,7 +12,6 @@ import time
 import threading
 from images import *  # Import all game images like bike, tree, rabbit
 
-# Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
 
 # Configure TensorFlow to use GPU 0 for MediaPipe if available
@@ -48,7 +47,8 @@ def scale_position(x, y):
 # Assets
 rabbits = [rabbit for _ in range(4)]
 trees = [tree for _ in range(20)]
-player = bike
+players = [bike, bike, bike]
+
 cap = cv2.VideoCapture(0)
 print("[DEBUG] Camera capture initialized.")
 
@@ -96,18 +96,19 @@ def listen_and_render(client_socket):
         # Clear the screen and draw assets
         screen.fill((0, 0, 0))  # Black background
 
-        # Draw bikes from game state
+        bike_i = 0
         for bike_info in game_state.get("bikes", []):
             # Scale bike position to client screen size
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
             if bike_info["ip"] == client_ip:
                 # This is the client's bike
-                screen.blit(player, bike_pos)
+                screen.blit(ME, bike_pos)
                 print(f"[DEBUG] Player bike at position: {bike_pos}")
             else:
                 # This is the opponent's bike
-                screen.blit(player, bike_pos)
+                screen.blit(players[bike_i], bike_pos)
                 print(f"[DEBUG] Opponent bike at position: {bike_pos}")
+                bike_i = bike_i +  1
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
