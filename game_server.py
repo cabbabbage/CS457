@@ -52,7 +52,7 @@ def handle_client(client_socket, addr):
             for obstacle in obstacles:
                 if not obstacle.active:
                     obstacle.activate()
-                    print(f"[DEBUG] Activated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
+                    #print(f"[DEBUG] Activated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
                     break
 
             # Update obstacles

@@ -8,8 +8,6 @@ import json
 import time
 import threading
 import random
-import asyncio
-from pynput import keyboard
 from images import *
 
 # Constants for server dimensions
@@ -36,12 +34,12 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 59929))  # Ensure IP and port are correct
-    print("[DEBUG] Connected to server at 129.82.45.129:55205.")
+    client_socket.connect(("129.82.45.129", 42377))  # Ensure IP and port are correct
+    print("[DEBUG] Connected to server at 129.82.45.129:36929.")
     return client_socket
 
 # Listen to the server for game state updates and render visuals
-def listen_and_render(client_socket, id):
+def listen_and_render(client_socket, id, controller):
     game_over = False
     game_state = {}
 
@@ -66,11 +64,25 @@ def listen_and_render(client_socket, id):
     listener_thread.start()
 
     while not game_over:
-        # Handle pygame events
+        # Handle pygame events for keyboard input
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
                 break
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w:
+                    controller.y = -1
+                elif event.key == pygame.K_s:
+                    controller.y = 1
+                elif event.key == pygame.K_a:
+                    controller.x = -1
+                elif event.key == pygame.K_d:
+                    controller.x = 1
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_w or event.key == pygame.K_s:
+                    controller.y = 0
+                if event.key == pygame.K_a or event.key == pygame.K_d:
+                    controller.x = 0
 
         # Clear the screen and draw assets
         screen.fill((0, 0, 0))  # Black background
@@ -99,6 +111,10 @@ def listen_and_render(client_socket, id):
                 t += 1
                 print(f"[DEBUG] Drawn tree at position: {pos}")
 
+        # Send controller updates to server
+        data = json.dumps({"id": id, "x": controller.x, "y": controller.y})
+        client_socket.send(data.encode("utf-8"))
+
         pygame.display.flip()
         pygame.time.delay(50)
 
@@ -116,85 +132,16 @@ def game_over_screen():
     quit()
 
 class Controller:
-    def __init__(self, client_socket, id):
-        self.id = id
-        self.running = False
+    def __init__(self):
         self.x = 0
         self.y = 0
-        self.client_socket = client_socket
-        self.keys_pressed = set()
-
-    def start(self):
-        self.running = True
-        asyncio.run(self.run())
-
-    def end(self):
-        self.running = False
-        self.client_socket.close()
-
-    async def run(self):
-        with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as listener:
-            while self.running:
-                await asyncio.sleep(0.2)
-                self.update_position()
-                data = json.dumps({"id": self.id, "x": self.x, "y": self.y})
-                self.client_socket.send(data.encode("utf-8"))
-
-    def on_press(self, key):
-        try:
-            if key.char == 'w':
-                self.keys_pressed.add('up')
-            elif key.char == 's':
-                self.keys_pressed.add('down')
-            elif key.char == 'a':
-                self.keys_pressed.add('left')
-            elif key.char == 'd':
-                self.keys_pressed.add('right')
-        except AttributeError:
-            pass
-
-    def on_release(self, key):
-        try:
-            if key.char == 'w' and 'up' in self.keys_pressed:
-                self.keys_pressed.remove('up')
-            elif key.char == 's' and 'down' in self.keys_pressed:
-                self.keys_pressed.remove('down')
-            elif key.char == 'a' and 'left' in self.keys_pressed:
-                self.keys_pressed.remove('left')
-            elif key.char == 'd' and 'right' in self.keys_pressed:
-                self.keys_pressed.remove('right')
-        except AttributeError:
-            pass
-
-    def update_position(self):
-        # Horizontal movement
-        if 'left' in self.keys_pressed and 'right' in self.keys_pressed:
-            self.x = 0
-        elif 'left' in self.keys_pressed:
-            self.x = -1
-        elif 'right' in self.keys_pressed:
-            self.x = 1
-        else:
-            self.x = 0
-
-        # Vertical movement
-        if 'up' in self.keys_pressed and 'down' in self.keys_pressed:
-            self.y = 0
-        elif 'up' in self.keys_pressed:
-            self.y = -1
-        elif 'down' in self.keys_pressed:
-            self.y = 1
-        else:
-            self.y = 0
 
 # Main function to initialize and run the client
 def main():
     id = random.randint(1000000, 2000000)
     client_socket = connect_to_server()
-    controller = Controller(client_socket, id)
-    threading.Thread(target=controller.start).start()  # Run the controller in a separate thread
-    listen_and_render(client_socket, id)
-    controller.end()  # Stop the controller when done
+    controller = Controller()
+    listen_and_render(client_socket, id, controller)
     client_socket.close()
     print("[DEBUG] Client socket closed.")
 
