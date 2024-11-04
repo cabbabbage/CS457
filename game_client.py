@@ -5,9 +5,9 @@ import numpy as np
 import socket
 import pygame
 import json
-import time
 import threading
 import random
+import time
 from images import *
 
 # Constants for server dimensions
@@ -19,6 +19,7 @@ screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 client_width, client_height = screen.get_size()
 pygame.display.set_caption("Client Game Visuals")
 font = pygame.font.SysFont(None, 40)
+clock = pygame.time.Clock()
 print("[DEBUG] Full-screen mode with dimensions:", client_width, "x", client_height)
 
 def scale_position(x, y):
@@ -34,8 +35,7 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 56013))  # Ensure IP and port are correct
-    print("[DEBUG] Connected to server at 129.82.45.129:36929.")
+    client_socket.connect(("129.82.45.129", 51411))  # Ensure IP and port are correct
     return client_socket
 
 # Listen to the server for game state updates and render visuals
@@ -48,7 +48,7 @@ def listen_and_render(client_socket, id, controller):
         nonlocal game_over, game_state
         while not game_over:
             try:
-                data = client_socket.recv(1024)
+                data = client_socket.recv(2048)  # Increase buffer size if needed
                 if not data:
                     print("[DEBUG] Lost connection to server.")
                     game_over = True
@@ -61,6 +61,7 @@ def listen_and_render(client_socket, id, controller):
 
     # Start network listener thread
     listener_thread = threading.Thread(target=network_listener)
+    listener_thread.daemon = True
     listener_thread.start()
 
     while not game_over:
@@ -79,12 +80,12 @@ def listen_and_render(client_socket, id, controller):
                 elif event.key == pygame.K_d:
                     controller.x = 1
             elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_w or event.key == pygame.K_s:
+                if event.key in {pygame.K_w, pygame.K_s}:
                     controller.y = 0
-                if event.key == pygame.K_a or event.key == pygame.K_d:
+                if event.key in {pygame.K_a, pygame.K_d}:
                     controller.x = 0
 
-        # Clear the screen and draw assets
+        # Clear the screen
         screen.fill((0, 0, 0))  # Black background
 
         # Draw bikes from game state
@@ -93,11 +94,9 @@ def listen_and_render(client_socket, id, controller):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
             if bike_info["id"] == id:
                 screen.blit(player, bike_pos)
-                print(f"[DEBUG] Player bike at position: {bike_pos}")
             else:
                 screen.blit(ops[o % len(ops)], bike_pos)
                 o += 1
-                print(f"[DEBUG] Opponent bike at position: {bike_pos}")
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
@@ -105,18 +104,16 @@ def listen_and_render(client_socket, id, controller):
             if obstacle_info["type"] == "rabbit":
                 screen.blit(rabbits[r % len(rabbits)], pos)
                 r += 1
-                print(f"[DEBUG] Drawn rabbit at position: {pos}")
             elif obstacle_info["type"] == "tree":
                 screen.blit(trees[t % len(trees)], pos)
                 t += 1
-                print(f"[DEBUG] Drawn tree at position: {pos}")
 
         # Send controller updates to server
         data = json.dumps({"id": id, "x": controller.x, "y": controller.y})
-        client_socket.send(data.encode("utf-8"))
+        client_socket.sendall(data.encode("utf-8"))
 
         pygame.display.flip()
-        pygame.time.delay(50)
+        clock.tick(30)  # Limit to 60 FPS
 
     listener_thread.join()
     game_over_screen()
