@@ -36,7 +36,7 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 41385))  # Ensure IP and port are correct
+    client_socket.connect(("129.82.45.129", 37405))  # Ensure IP and port are correct
     print("[DEBUG] Connected to server at 129.82.45.129:55205.")
     return client_socket
 
