@@ -102,7 +102,7 @@ def handle_client(client_socket, addr):
             print(f"[ERROR] Failed to send data to client: {e}")
             break
 
-        time.sleep(1 / 40)  # Control the frame rate
+        time.sleep(1 / 20)  # Control the frame rate
 
     # Clean up when client disconnects
     with lock:
