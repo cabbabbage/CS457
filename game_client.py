@@ -35,7 +35,7 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 45411))  # Ensure IP and port are correct
+    client_socket.connect(("129.82.45.129", 38901))  # Ensure IP and port are correct
     return client_socket
 
 # Listen to the server for game state updates and render visuals
