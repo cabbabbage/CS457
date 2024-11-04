@@ -9,8 +9,25 @@ from Rabbit import Rabbit
 from Bike import Bike
 
 # Game constants
-HOST = socket.gethostbyname(socket.gethostname())  # Get the local IP address
-PORT = 0
+import socket
+import json
+
+HOST = socket.gethostbyname(socket.gethostname())
+PORT = 0  # Let the OS pick an available port
+
+# Setup server socket
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((HOST, PORT))
+server_socket.listen(5)
+
+# Retrieve the assigned IP address and port
+server_ip, server_port = server_socket.getsockname()
+
+# Save IP and port to a JSON file
+with open("server_info.json", "w") as file:
+    json.dump({"ip": server_ip, "port": server_port}, file)
+
+print(f"Server listening on {server_ip}:{server_port}")
 
 # Globals
 players = []  # Shared list of player bikes
