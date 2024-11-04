@@ -47,8 +47,8 @@ class Bike:
             if data:
                 # Parse shoulder vector and length from received data (expecting JSON tuple format)
                 self.id, x, y = json.loads(data)
-                self.x += x * mult
-                self.y += y * mult
+                self.x += int(x) * mult
+                self.y += int(y) * mult
 
                 self.get_hitbox()
 
