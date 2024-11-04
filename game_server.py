@@ -1,5 +1,6 @@
 import socket
 import json
+import random
 import time
 from threading import Thread, Lock
 
@@ -14,6 +15,7 @@ PORT = 0  # Let the OS pick an available port
 # Globals
 players = []  # Shared list of player bikes
 obstacles = []  # Shared list of obstacles
+game_started = False  # Flag to indicate when the game has started
 lock = Lock()  # Lock to handle shared resources
 
 def game_setup():
@@ -23,81 +25,79 @@ def game_setup():
     obstacles.extend([Rabbit(width, height) for _ in range(4)])
     return obstacles
 
-def game_loop():
-    """Continuously updates the game state, even if no players are connected."""
-    global obstacles
-    while True:
-        # Update obstacles
-        with lock:
-            for obstacle in obstacles:
-                if not obstacle.active:
-                    obstacle.activate()
-                    if obstacle.active:
-                        print(f"[DEBUG] Activated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
-                    break
-
-            # Move active obstacles
-            for obstacle in obstacles:
-                if obstacle.active:
-                    obstacle.update()
-                    print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
-
-            # Update player bikes
-            for player_bike in players:
-                if player_bike.active:
-                    player_bike.update()
-                    player_bike.score += 0.1
-                    print(f"[DEBUG] Updated bike position to ({player_bike.x}, {player_bike.y}), score: {player_bike.score}")
-
-                    # Check for collisions
-                    for obstacle in obstacles:
-                        if obstacle.active and (
-                            player_bike.hitbox_right > obstacle.hitbox_left
-                            and player_bike.hitbox_left < obstacle.hitbox_right
-                            and player_bike.hitbox_bottom > obstacle.hitbox_top
-                            and player_bike.hitbox_top < obstacle.hitbox_bottom
-                        ):
-                            print("[DEBUG] Collision detected!")
-                            player_bike.active = False
-                            break
-
-        time.sleep(.2)  # Control the frame rate
-
 def handle_client(client_socket, addr):
-    """Handles each client connection and sends game state updates."""
+    global game_started
     width, height = 1920, 1080
+  
     player_bike = Bike(width, height, client_socket, addr)
 
     with lock:
         players.append(player_bike)  # Add bike to players list
         print(f"[DEBUG] Player bike added. Total players: {len(players)}")
 
+    # Wait until there are 2 players connected
+    #while len(players) < 1:
+    #    time.sleep(0.1)
+
+    # Start game obstacles and scoring once two players are connected
+    with lock:
+        if not game_started:
+            game_started = True
+            print("[DEBUG] Game has started.")
+
     running = True
     while running:
+        # Only start obstacle updates if game has started
+        if game_started:
+            for obstacle in obstacles:
+                if not obstacle.active:
+                    obstacle.activate()
+                    print(f"[DEBUG] Activated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
+                    break
+
+            # Update obstacles
+            for obstacle in obstacles:
+                if obstacle.active:
+                    obstacle.update()
+                    print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
+
+        player_bike.update()
+        player_bike.score += 0.1
+        print(f"[DEBUG] Updated bike position to ({player_bike.x}, {player_bike.y}), score: {player_bike.score}")
+
+        # Check for collisions
+        for obstacle in obstacles:
+            if obstacle.active:
+                if (player_bike.hitbox_right > obstacle.hitbox_left and player_bike.hitbox_left < obstacle.hitbox_right):
+                    if (player_bike.hitbox_bottom > obstacle.hitbox_top and player_bike.hitbox_top < obstacle.hitbox_bottom):
+                        print("[DEBUG] Collision detected!")
+                        player_bike.active = False
+                        running = False
+                        break
+
         # Prepare game state as JSON
-        with lock:
-            game_state = {
-                "bikes": [
-                    {
-                        "type": bike.type,
-                        "position": {"x": bike.x, "y": bike.y},
-                        "score": bike.score,
-                        "status": bike.active,
-                        "id": bike.id  # Note: This isn't secure; consider alternatives for production
-                    } for bike in players
-                ],
-                "obstacles": [
-                    {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
-                    for obstacle in obstacles if obstacle.active
-                ],
-                "game_over": not player_bike.active  # True if the game has ended for this player
-            }
-            print(f"[DEBUG] Game state prepared for client: {addr}")
+        game_state = {
+            "bikes": [
+                {
+                    "type": bike.type,
+                    "position": {"x": bike.x, "y": bike.y},
+                    "score": bike.score,
+                    "status": bike.active,
+                    "ip": bike.id  # Note: This isn't secure; consider alternatives for production
+                } for bike in players
+            ],
+            "obstacles": [
+                {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
+                for obstacle in obstacles if obstacle.active
+            ],
+            "game_over": not player_bike.active  # True if the game has ended
+        }
+        print(f"[DEBUG] Game state prepared: {game_state}")
 
         # Send game state to client
         try:
             client_socket.sendall(json.dumps(game_state).encode("utf-8"))
-            #print(f"[DEBUG] Game state sent to client: {addr}")
+            print(f"[DEBUG] Game state sent to client: {json.dumps(game_state)}")
         except (ConnectionResetError, BrokenPipeError) as e:
             print(f"[ERROR] Failed to send data to client: {e}")
             break
@@ -107,7 +107,8 @@ def handle_client(client_socket, addr):
     # Clean up when client disconnects
     with lock:
         players.remove(player_bike)
-        print(f"Client {addr} disconnected.")
+        print("Client disconnected.")
+
     client_socket.close()
 
 def start_server():
@@ -121,10 +122,6 @@ def start_server():
     # Retrieve the assigned IP address and port
     server_ip, server_port = server_socket.getsockname()
     print(f"Server listening on {server_ip}:{server_port}")
-
-    # Start the game loop in a separate thread
-    game_thread = Thread(target=game_loop, daemon=True)
-    game_thread.start()
 
     # Accept clients and start game
     while True:
