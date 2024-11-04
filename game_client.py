@@ -35,12 +35,12 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 53869))  # Ensure IP and port are correct
-    print("[DEBUG] Connected to server at 129.82.45.129:33357.")
+    client_socket.connect(("129.82.45.129", 33569))  # Ensure IP and port are correct
+    print("[DEBUG] Connected to server at 129.82.45.129:33569.")
     return client_socket
 
 # Listen to the server for game state updates and render visuals
-def listen_and_render(client_socket):
+def listen_and_render(client_socket, id):
     game_over = False
     game_state = {}
 
@@ -79,22 +79,23 @@ def listen_and_render(client_socket):
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
             if bike_info["id"] == id:
-                screen.blit(ops[o % len(ops)], bike_pos)
-                o += 1
+                screen.blit(player, bike_pos)
+                
                 print(f"[DEBUG] Player bike at position: {bike_pos}")
             else:
-                screen.blit(bike, bike_pos)
+                o += 1
+                screen.blit(ops[o], bike_pos)
                 print(f"[DEBUG] Opponent bike at position: {bike_pos}")
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
             pos = scale_position(obstacle_info["position"]["x"], obstacle_info["position"]["y"])
             if obstacle_info["type"] == "rabbit":
-                screen.blit(rabbits[r % len(rabbits)], pos)
+                screen.blit(rabbits[rabbits[r]], pos)
                 r += 1
                 print(f"[DEBUG] Drawn rabbit at position: {pos}")
             elif obstacle_info["type"] == "tree":
-                screen.blit(trees[t % len(trees)], pos)
+                screen.blit(trees[t], pos)
                 t += 1
                 print(f"[DEBUG] Drawn tree at position: {pos}")
 
@@ -119,7 +120,7 @@ def main():
     id = random.randint(1000000,2000000)
     client_socket = connect_to_server()
     controller = Controller(client_socket, id)
-    listen_and_render(client_socket)
+    listen_and_render(client_socket, id)
     client_socket.close()
     print("[DEBUG] Client socket closed.")
 

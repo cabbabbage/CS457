@@ -40,7 +40,7 @@ def game_loop():
             for obstacle in obstacles:
                 if obstacle.active:
                     obstacle.update()
-                    #print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
+                    print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
 
             # Update player bikes
             for player_bike in players:
