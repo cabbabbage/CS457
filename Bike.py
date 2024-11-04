@@ -50,7 +50,7 @@ class Bike:
                 self.x += int(x) * mult
                 self.y += int(y) * mult
 
-                self.get_hitbox()
+                
 
                 self.last_x = x
                 self.last_y = y
@@ -58,7 +58,8 @@ class Bike:
             # If any error occurs, fallback to previous values
                 self.x += self.last_x * mult
                 self.y += self.last_y * mult 
-
+        self.get_hitbox()
+        
     def get_hitbox(self):
         # Bike-specific hitbox adjustments
         self.hitbox_top, self.hitbox_bottom, self.hitbox_left, self.hitbox_right = Hitbox.calculate_hitbox(
