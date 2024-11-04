@@ -1,6 +1,5 @@
 import numpy as np
 from hitbox import Hitbox
-from pygame.locals import *
 from images import *
 import socket
 import json
@@ -23,39 +22,35 @@ class Bike:
         self.last_y = 0
         self.id = 0
 
-    # def update(self):
-    #     # Get body angle and shoulder length from TCP data
-    #     self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
-    #     self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
-    #     if self.standard_shoulders is None:
-    #         self.standard_shoulders = new_shoulders
-    #     else:
-    #         new_y = ((((new_shoulders / self.standard_shoulders) - 1.1) * -9) ** 3) - 0.2
-    #         self.y += max(min(new_y, 30), -30)
-    #         self.y = max(min(self.y, self.height - 170), 0)
-
-    #     self.x += self.body_angle
-    #     self.x = max(min(self.x, self.width - 70), 0)
-        
-    #     self.get_hitbox()
-
     def update(self):
-        mult = 5
+        mult = 5  # Movement multiplier
         try:
             # Attempt to receive data from client
             data = self.client_socket.recv(1024).decode("utf-8")
             if data:
-                # Parse shoulder vector and length from received data (expecting JSON tuple format)
-                self.id, x, y = json.loads(data)
+                # Parse the received data
+                parsed_data = json.loads(data)
+                self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+
+                # Apply movement based on received x and y
                 self.x += int(x) * mult
                 self.y += int(y) * mult
+
+                # Store last known values
                 self.last_x = x
                 self.last_y = y
-                print("yay")
-        except (socket.error, json.JSONDecodeError, ValueError):
-            # If any error occurs, fallback to previous values
-                self.x += self.last_x * mult
-                self.y += self.last_y * mult 
+                print(f"[DEBUG] Updated position to ({self.x}, {self.y}) with input ({x}, {y})")
+        except (socket.error, json.JSONDecodeError, ValueError) as e:
+            # If an error occurs, fallback to previous values
+            print(f"[ERROR] Error receiving data: {e}. Using last known values.")
+            self.x += self.last_x * mult
+            self.y += self.last_y * mult 
+
+        # Ensure the bike stays within screen bounds
+        self.x = max(0, min(self.x, self.width - self.img.get_width()))
+        self.y = max(0, min(self.y, self.height - self.img.get_height()))
+
+        # Update hitbox
         self.get_hitbox()
 
     def get_hitbox(self):
