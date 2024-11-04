@@ -1,47 +1,27 @@
 #!/usr/bin/env python3
 
 import os
-import tensorflow as tf
-import mediapipe as mp
-import cv2
 import numpy as np
 import socket
 import pygame
 import json
 import time
 import threading
-from images import *  # Import all game images like bike, tree, rabbit
+from images import *
 
 # Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
 
-# Configure TensorFlow to use GPU 0 for MediaPipe if available
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
-        tf.config.experimental.set_memory_growth(gpus[0], True)
-        print(f"[DEBUG] Using GPU: {gpus[0]}")
-    except RuntimeError as e:
-        print(f"[ERROR] TensorFlow GPU configuration error: {e}")
-else:
-    print("[DEBUG] No GPU detected. Running on CPU.")
 
-# Initialize Mediapipe and Pygame
-print("[DEBUG] Initializing Mediapipe and Pygame...")
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose()
 pygame.init()
 
-# Set to full screen and retrieve the client's screen dimensions
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 client_width, client_height = screen.get_size()
 pygame.display.set_caption("Client Game Visuals")
 font = pygame.font.SysFont(None, 40)
 print("[DEBUG] Full-screen mode with dimensions:", client_width, "x", client_height)
 
-# Scaling function to adjust positions from server to client dimensions
+
 def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
 
@@ -49,7 +29,7 @@ def scale_position(x, y):
 rabbits = [rabbit for _ in range(4)]
 trees = [tree for _ in range(20)]
 player = bike
-cap = cv2.VideoCapture(0)
+ops = [bike for _ in range(4)]
 print("[DEBUG] Camera capture initialized.")
 
 # Connect to the server
@@ -106,7 +86,7 @@ def listen_and_render(client_socket):
                 print(f"[DEBUG] Player bike at position: {bike_pos}")
             else:
                 # This is the opponent's bike
-                screen.blit(player, bike_pos)
+                screen.blit(bike, bike_pos)
                 print(f"[DEBUG] Opponent bike at position: {bike_pos}")
 
         # Draw obstacles from game state
@@ -120,19 +100,18 @@ def listen_and_render(client_socket):
                 screen.blit(tree, pos)
 
         # Display score (for example, the client’s own score)
-        score = next((bike["score"] for bike in game_state.get("bikes", []) if bike["ip"] == client_ip), 0)
-        score_text = font.render(f"Score: {int(score)}", True, (255, 255, 0))
-        screen.blit(score_text, (10, 10))
+        #score = next((bike["score"] for bike in game_state.get("bikes", []) if bike["ip"] == client_ip), 0)
+        #score_text = font.render(f"Score: {int(score)}", True, (255, 255, 0))
+        #screen.blit(score_text, (10, 10))
 
         pygame.display.flip()
         pygame.time.delay(25)
 
-    # Wait for network thread to finish when the game ends
     listener_thread.join()
     game_over_screen()
 
 def game_over_screen():
-    screen.fill((0, 0, 0))  # Clear screen
+    screen.fill((0, 0, 0))  
     label = font.render("GAME OVER", True, (255, 0, 0))
     screen.blit(label, (client_width // 2 - 100, client_height // 2))
     pygame.display.update()
@@ -144,6 +123,7 @@ def game_over_screen():
 # Main function to initialize and run the client
 def main():
     client_socket = connect_to_server()
+    controller = controller(socket)
     listen_and_render(client_socket)
     client_socket.close()
     print("[DEBUG] Client socket closed.")

@@ -19,55 +19,50 @@ class Bike:
         self.width = width
         self.height = height
         self.client_ip = addr
+        self.last_x = 0
+        self.last_y = 0
+
+    # def update(self):
+    #     # Get body angle and shoulder length from TCP data
+    #     self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
+    #     self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
+    #     if self.standard_shoulders is None:
+    #         self.standard_shoulders = new_shoulders
+    #     else:
+    #         new_y = ((((new_shoulders / self.standard_shoulders) - 1.1) * -9) ** 3) - 0.2
+    #         self.y += max(min(new_y, 30), -30)
+    #         self.y = max(min(self.y, self.height - 170), 0)
+
+    #     self.x += self.body_angle
+    #     self.x = max(min(self.x, self.width - 70), 0)
+        
+    #     self.get_hitbox()
 
     def update(self):
-        # Get body angle and shoulder length from TCP data
-        self.body_angle, new_shoulders = self.get_body_angle(self.body_angle, self.standard_shoulders)
+        mult = 5
+        try:
+            # Attempt to receive data from client
+            data = self.client_socket.recv(1024).decode("utf-8")
+            if data:
+                # Parse shoulder vector and length from received data (expecting JSON tuple format)
+                x, y = json.loads(data) #fix later
+                self.x += x * mult
+                self.y += y * mult
 
-        if self.standard_shoulders is None:
-            self.standard_shoulders = new_shoulders
-        else:
-            new_y = ((((new_shoulders / self.standard_shoulders) - 1.1) * -9) ** 3) - 0.2
-            self.y += max(min(new_y, 30), -30)
-            self.y = max(min(self.y, self.height - 170), 0)
+                self.get_hitbox()
 
-        self.x += self.body_angle
-        self.x = max(min(self.x, self.width - 70), 0)
-        
-        self.get_hitbox()
+                self.last_x = x
+                self.last_y = y
+        except (socket.error, json.JSONDecodeError, ValueError):
+            # If any error occurs, fallback to previous values
+                self.x += self.last_x * mult
+                self.y += self.last_y * mult 
 
     def get_hitbox(self):
         # Bike-specific hitbox adjustments
         self.hitbox_top, self.hitbox_bottom, self.hitbox_left, self.hitbox_right = Hitbox.calculate_hitbox(
             self.img, self.x, self.y, width_adjust=0, height_adjust=0
         )
-
-    def get_body_angle(self, last_angle, standard_shoulders):
-        try:
-            # Attempt to receive data from client
-            data = self.client_socket.recv(1024).decode("utf-8")
-            if data:
-                # Parse shoulder vector and length from received data (expecting JSON tuple format)
-                shoulder_vector, shoulder_length = json.loads(data)
-                
-                # Calculate the angle in degrees
-                angle_degrees = np.arctan2(shoulder_vector[1], shoulder_vector[0])
-
-                if angle_degrees < 0:
-                    angle_degrees = -1 * angle_degrees - np.pi
-                if angle_degrees > 0:
-                    angle_degrees = -1 * (angle_degrees - np.pi)
-
-                angle_degrees *= 100
-
-                # Limit angle if it exceeds threshold
-                if abs(angle_degrees) > 100:
-                    angle_degrees = 0
-
-                return angle_degrees, shoulder_length
-        except (socket.error, json.JSONDecodeError, ValueError):
-            # If any error occurs, fallback to previous values
-            return last_angle, standard_shoulders
 
     def get_position(self):
         return self.x, self.y
