@@ -44,6 +44,7 @@ def handle_client(client_socket, addr):
             for obstacle in obstacles:
                 if not obstacle.active:
                     obstacle.activate()
+
                     break
 
             for obstacle in obstacles:

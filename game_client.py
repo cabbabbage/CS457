@@ -34,9 +34,19 @@ print("[DEBUG] Assets loaded.")
 
 # Connect to the server
 def connect_to_server():
+    # Read server info from the JSON file
+    with open("server_info.json", "r") as file:
+        server_info = json.load(file)
+    
+    server_ip = server_info["ip"]
+    server_port = server_info["port"]
+
+    # Connect to the server using the IP and port from the file
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 56635))  # Ensure IP and port are correct
+    client_socket.connect((server_ip, server_port))
+    print(f"[DEBUG] Connected to server at {server_ip}:{server_port}.")
     return client_socket
+
 
 # Listen to the server for game state updates and render visuals
 def listen_and_render(client_socket, id, controller):
@@ -113,7 +123,7 @@ def listen_and_render(client_socket, id, controller):
         client_socket.sendall(data.encode("utf-8"))
 
         pygame.display.flip()
-        clock.tick(30)  # Limit to 60 FPS
+        clock.tick(60)  # Limit to 60 FPS
 
     listener_thread.join()
     game_over_screen()
