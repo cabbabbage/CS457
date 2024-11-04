@@ -117,7 +117,7 @@ def game_over_screen():
 # Main function to initialize and run the client
 def main():
     client_socket = connect_to_server()
-    controller = Controller("129.82.45.129", 33357)
+    controller = Controller("129.82.45.129", 53065)
     listen_and_render(client_socket)
     client_socket.close()
     print("[DEBUG] Client socket closed.")
