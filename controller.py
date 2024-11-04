@@ -4,7 +4,9 @@ import json
 from pynput import keyboard
 
 class Controller:
-    def __init__(self, socket):
+    def __init__(self, socket, id):
+        
+        self.id = id
         self.running = False
         self.x = 0
         self.y = 0
@@ -25,7 +27,7 @@ class Controller:
             while self.running:
                 await asyncio.sleep(0.2)
                 self.update_position()
-                data = json.dumps((self.x, self.y))
+                data = json.dumps((self.id, self.x, self.y))
                 self.client_socket.send(data.encode("utf-8"))
 
     def on_press(self, key):

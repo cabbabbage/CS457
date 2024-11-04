@@ -9,6 +9,7 @@ import time
 import threading
 from images import *
 from controller import Controller
+import random
 
 # Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
@@ -34,13 +35,12 @@ print("[DEBUG] Assets loaded.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("129.82.45.129", 37689))  # Ensure IP and port are correct
+    client_socket.connect(("129.82.45.129", 53869))  # Ensure IP and port are correct
     print("[DEBUG] Connected to server at 129.82.45.129:33357.")
     return client_socket
 
 # Listen to the server for game state updates and render visuals
 def listen_and_render(client_socket):
-    client_ip = client_socket.getsockname()[0]
     game_over = False
     game_state = {}
 
@@ -78,7 +78,7 @@ def listen_and_render(client_socket):
         r, t, o = 0, 0, 0
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
-            if bike_info["ip"] == client_ip:
+            if bike_info["id"] == id:
                 screen.blit(ops[o % len(ops)], bike_pos)
                 o += 1
                 print(f"[DEBUG] Player bike at position: {bike_pos}")
@@ -99,7 +99,7 @@ def listen_and_render(client_socket):
                 print(f"[DEBUG] Drawn tree at position: {pos}")
 
         pygame.display.flip()
-        pygame.time.delay(.2)
+        pygame.time.delay(50)
 
     listener_thread.join()
     game_over_screen()
@@ -116,8 +116,9 @@ def game_over_screen():
 
 # Main function to initialize and run the client
 def main():
+    id = random.randint(1000000,2000000)
     client_socket = connect_to_server()
-    controller = Controller(client_socket)
+    controller = Controller(client_socket, id)
     listen_and_render(client_socket)
     client_socket.close()
     print("[DEBUG] Client socket closed.")

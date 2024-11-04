@@ -83,7 +83,7 @@ def handle_client(client_socket, addr):
                         "position": {"x": bike.x, "y": bike.y},
                         "score": bike.score,
                         "status": bike.active,
-                        "ip": bike.client_ip  # Note: This isn't secure; consider alternatives for production
+                        "id": bike.id  # Note: This isn't secure; consider alternatives for production
                     } for bike in players
                 ],
                 "obstacles": [

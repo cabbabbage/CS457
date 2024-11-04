@@ -21,6 +21,7 @@ class Bike:
         self.client_ip = addr
         self.last_x = 0
         self.last_y = 0
+        self.id = 0
 
     # def update(self):
     #     # Get body angle and shoulder length from TCP data
@@ -45,7 +46,7 @@ class Bike:
             data = self.client_socket.recv(1024).decode("utf-8")
             if data:
                 # Parse shoulder vector and length from received data (expecting JSON tuple format)
-                x, y = json.loads(data) #fix later
+                self.id, x, y = json.loads(data)
                 self.x += x * mult
                 self.y += y * mult
 
