@@ -9,8 +9,8 @@ from Rabbit import Rabbit
 from Bike import Bike
 
 # Game constants
-HOST = 'localhost'
-PORT = 5555
+HOST = socket.gethostbyname(socket.gethostname())  # Get the local IP address
+PORT = 0  # Let the OS pick an available port
 
 # Globals
 players = []  # Shared list of player bikes
@@ -28,7 +28,6 @@ def game_setup():
 def handle_client(client_socket, addr):
     global game_started
     width, height = 1920, 1080
-
   
     player_bike = Bike(width, height, client_socket, addr)
 
@@ -85,7 +84,7 @@ def handle_client(client_socket, addr):
                     "position": {"x": bike.x, "y": bike.y},
                     "score": bike.score,
                     "status": bike.active,
-                    "ip": bike.client_ip #lol this is not secure we will fix this later
+                    "ip": bike.client_ip  # Note: This isn't secure; consider alternatives for production
                 } for bike in players
             ],
             "obstacles": [
@@ -120,13 +119,16 @@ def start_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen(5)
-    print(f"Server listening on {HOST}:{PORT}")
+
+    # Retrieve the assigned IP address and port
+    server_ip, server_port = server_socket.getsockname()
+    print(f"Server listening on {server_ip}:{server_port}")
 
     # Accept clients and start game
     while True:
         client_socket, addr = server_socket.accept()
         print(f"[DEBUG] Client connected from {addr}")
-        client_thread = Thread(target=handle_client, args=(client_socket,addr,))
+        client_thread = Thread(target=handle_client, args=(client_socket, addr,))
         client_thread.start()
 
 if __name__ == "__main__":
