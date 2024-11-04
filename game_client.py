@@ -34,19 +34,9 @@ print("[DEBUG] Assets loaded.")
 
 # Connect to the server
 def connect_to_server():
-    # Read server info from the JSON file
-    with open("server_info.json", "r") as file:
-        server_info = json.load(file)
-    
-    server_ip = server_info["ip"]
-    server_port = server_info["port"]
-
-    # Connect to the server using the IP and port from the file
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((server_ip, server_port))
-    print(f"[DEBUG] Connected to server at {server_ip}:{server_port}.")
+    client_socket.connect(("129.82.45.129", 45411))  # Ensure IP and port are correct
     return client_socket
-
 
 # Listen to the server for game state updates and render visuals
 def listen_and_render(client_socket, id, controller):

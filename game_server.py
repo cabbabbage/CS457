@@ -13,7 +13,7 @@ import socket
 import json
 
 HOST = socket.gethostbyname(socket.gethostname())
-PORT = 0  # Let the OS pick an available port
+PORT = 45411 
 
 # Setup server socket
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
