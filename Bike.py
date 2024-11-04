@@ -1,8 +1,7 @@
-import numpy as np
-from hitbox import Hitbox
-from images import *
 import socket
 import json
+from images import *
+from hitbox import Hitbox
 
 class Bike:
     def __init__(self, width, height, client_socket, addr):
@@ -21,19 +20,7 @@ class Bike:
         self.last_x = 0
         self.last_y = 0
         self.id = 0
-
-import json
-import socket
-
-class Bike:
-    def __init__(self, width, height, client_socket, addr):
-        self.x = width // 2 - 35
-        self.y = height - 300
-        self.last_x = 0
-        self.last_y = 0
-        self.id = 0
-        self.client_socket = client_socket
-        self.buffer = ""  # Buffer for incomplete JSON messages
+        self.buffer = ""  # Buffer for partial JSON data
 
     def update(self):
         mult = 5  # Movement multiplier
@@ -41,42 +28,43 @@ class Bike:
             # Attempt to receive data from client
             data = self.client_socket.recv(1024).decode("utf-8")
             if data:
-                # Append new data to the buffer
+                # Append received data to buffer
                 self.buffer += data
 
-                # Process complete JSON objects
+                # Process complete JSON objects in the buffer
                 while True:
                     try:
-                        # Attempt to parse JSON object from the buffer
+                        # Parse one JSON object from the buffer
                         parsed_data, index = json.JSONDecoder().raw_decode(self.buffer)
-                        self.buffer = self.buffer[index:].lstrip()  # Remove parsed object from buffer
+                        self.buffer = self.buffer[index:].lstrip()  # Remove parsed JSON object from buffer
 
-                        # Extract and apply movement based on x and y
+                        # Extract movement data
                         self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+
+                        # Apply movement based on x and y values
                         self.x += int(x) * mult
                         self.y += int(y) * mult
 
-                        # Store last known values
+                        # Update last known values
                         self.last_x = x
                         self.last_y = y
                     except json.JSONDecodeError:
-                        # Break if there's an incomplete JSON object remaining in the buffer
+                        # Exit loop if there's incomplete data left in the buffer
                         break
         except (socket.error, ValueError) as e:
-            # If an error occurs, fallback to previous values
+            # On error, fallback to last known x and y values
             self.x += self.last_x * mult
             self.y += self.last_y * mult
 
-
-        # Ensure the bike stays within screen bounds
+        # Constrain the bike within screen bounds
         self.x = max(0, min(self.x, self.width - self.img.get_width()))
         self.y = max(0, min(self.y, self.height - self.img.get_height()))
 
-        # Update hitbox
+        # Update hitbox based on the current position
         self.get_hitbox()
 
     def get_hitbox(self):
-        # Bike-specific hitbox adjustments
+        # Calculate hitbox with bike-specific adjustments
         self.hitbox_top, self.hitbox_bottom, self.hitbox_left, self.hitbox_right = Hitbox.calculate_hitbox(
             self.img, self.x, self.y, width_adjust=0, height_adjust=0
         )
