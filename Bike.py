@@ -22,29 +22,51 @@ class Bike:
         self.last_y = 0
         self.id = 0
 
+import json
+import socket
+
+class Bike:
+    def __init__(self, width, height, client_socket, addr):
+        self.x = width // 2 - 35
+        self.y = height - 300
+        self.last_x = 0
+        self.last_y = 0
+        self.id = 0
+        self.client_socket = client_socket
+        self.buffer = ""  # Buffer for incomplete JSON messages
+
     def update(self):
         mult = 5  # Movement multiplier
         try:
             # Attempt to receive data from client
             data = self.client_socket.recv(1024).decode("utf-8")
             if data:
-                # Parse the received data
-                parsed_data = json.loads(data)
-                self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+                # Append new data to the buffer
+                self.buffer += data
 
-                # Apply movement based on received x and y
-                self.x += int(x) * mult
-                self.y += int(y) * mult
+                # Process complete JSON objects
+                while True:
+                    try:
+                        # Attempt to parse JSON object from the buffer
+                        parsed_data, index = json.JSONDecoder().raw_decode(self.buffer)
+                        self.buffer = self.buffer[index:].lstrip()  # Remove parsed object from buffer
 
-                # Store last known values
-                self.last_x = x
-                self.last_y = y
-                print(f"[DEBUG] Updated position to ({self.x}, {self.y}) with input ({x}, {y})")
-        except (socket.error, json.JSONDecodeError, ValueError) as e:
+                        # Extract and apply movement based on x and y
+                        self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+                        self.x += int(x) * mult
+                        self.y += int(y) * mult
+
+                        # Store last known values
+                        self.last_x = x
+                        self.last_y = y
+                    except json.JSONDecodeError:
+                        # Break if there's an incomplete JSON object remaining in the buffer
+                        break
+        except (socket.error, ValueError) as e:
             # If an error occurs, fallback to previous values
-            print(f"[ERROR] Error receiving data: {e}. Using last known values.")
             self.x += self.last_x * mult
-            self.y += self.last_y * mult 
+            self.y += self.last_y * mult
+
 
         # Ensure the bike stays within screen bounds
         self.x = max(0, min(self.x, self.width - self.img.get_width()))
