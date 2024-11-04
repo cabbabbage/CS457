@@ -61,7 +61,7 @@ def game_loop():
                             player_bike.active = False
                             break
 
-        time.sleep(1 / 40)  # Control the frame rate
+        time.sleep(.2)  # Control the frame rate
 
 def handle_client(client_socket, addr):
     """Handles each client connection and sends game state updates."""
@@ -97,7 +97,7 @@ def handle_client(client_socket, addr):
         # Send game state to client
         try:
             client_socket.sendall(json.dumps(game_state).encode("utf-8"))
-            print(f"[DEBUG] Game state sent to client: {addr}")
+            #print(f"[DEBUG] Game state sent to client: {addr}")
         except (ConnectionResetError, BrokenPipeError) as e:
             print(f"[ERROR] Failed to send data to client: {e}")
             break
