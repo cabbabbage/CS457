@@ -59,11 +59,11 @@ def handle_client(client_socket, addr):
             for obstacle in obstacles:
                 if obstacle.active:
                     obstacle.update()
-                    print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
+                    #print(f"[DEBUG] Updated obstacle of type {obstacle.type} at position ({obstacle.x}, {obstacle.y})")
 
         player_bike.update()
         player_bike.score += 0.1
-        print(f"[DEBUG] Updated bike position to ({player_bike.x}, {player_bike.y}), score: {player_bike.score}")
+        #print(f"[DEBUG] Updated bike position to ({player_bike.x}, {player_bike.y}), score: {player_bike.score}")
 
         # Check for collisions
         for obstacle in obstacles:
@@ -92,7 +92,7 @@ def handle_client(client_socket, addr):
             ],
             "game_over": not player_bike.active  # True if the game has ended
         }
-        print(f"[DEBUG] Game state prepared: {game_state}")
+        #print(f"[DEBUG] Game state prepared: {game_state}")
 
         # Send game state to client
         try:
