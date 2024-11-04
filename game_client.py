@@ -8,6 +8,7 @@ import json
 import time
 import threading
 from images import *
+from controller import Controller
 
 # Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
@@ -35,7 +36,7 @@ print("[DEBUG] Camera capture initialized.")
 # Connect to the server
 def connect_to_server():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("localhost", 5555))
+    client_socket.connect(("129.82.45.129", 38979))
     print("[DEBUG] Connected to server at localhost:5555.")
     return client_socket
 
@@ -123,7 +124,7 @@ def game_over_screen():
 # Main function to initialize and run the client
 def main():
     client_socket = connect_to_server()
-    controller = controller(socket)
+    controller = Controller(socket)
     listen_and_render(client_socket)
     client_socket.close()
     print("[DEBUG] Client socket closed.")

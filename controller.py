@@ -10,8 +10,7 @@ class Controller:
         self.y = 0
         self.client_socket = socket
         self.keys_pressed = set()
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect((self.server_ip, self.server_port))
+
 
     def start(self):
         self.running = True

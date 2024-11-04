@@ -36,8 +36,8 @@ def handle_client(client_socket, addr):
         print(f"[DEBUG] Player bike added. Total players: {len(players)}")
 
     # Wait until there are 2 players connected
-    while len(players) < 2:
-        time.sleep(0.1)
+    #while len(players) < 1:
+    #    time.sleep(0.1)
 
     # Start game obstacles and scoring once two players are connected
     with lock:
