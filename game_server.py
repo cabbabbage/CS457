@@ -30,22 +30,23 @@ def serialize_game_state(game_state):
     bikes = [
         struct.pack(
             ">Ifii?",  # Format: int (id), float (score), int (x), int (y), bool (status)
-            bike["id"],
-            bike["score"],
-            bike["position"]["x"],
-            bike["position"]["y"],
-            bike["status"]
+            int(bike["id"]),
+            float(bike["score"]),
+            int(bike["position"]["x"]),
+            int(bike["position"]["y"]),
+            bool(bike["status"])
         ) for bike in game_state["bikes"]
     ]
     obstacles = [
         struct.pack(
             ">iII",  # Format: int (type), int (x), int (y)
-            obstacle["type"],
-            obstacle["position"]["x"],
-            obstacle["position"]["y"]
+            int(obstacle["type"]),  # Ensure "type" is an integer
+            int(obstacle["position"]["x"]),  # Ensure "x" is an integer
+            int(obstacle["position"]["y"])   # Ensure "y" is an integer
         ) for obstacle in game_state["obstacles"]
     ]
     return b''.join(bikes + obstacles)
+
 
 # Compress data to reduce packet size
 def compress_data(data):
