@@ -150,4 +150,7 @@ async def start_server():
         await server.serve_forever()
 
 if __name__ == "__main__":
-    asyncio.run(start_server())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_server())
+    loop.run_forever()
+
