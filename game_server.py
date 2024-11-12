@@ -33,22 +33,23 @@ def serialize_game_state(game_state):
     bikes = [
         struct.pack(
             ">Ifii?",  # Format: int (id), float (score), int (x), int (y), bool (status)
-            int(bike["id"]),
+            int(bike["id"]) & 0xFFFFFFFF,             # Ensure ID fits within 32-bit integer range
             float(bike["score"]),
-            int(bike["position"]["x"]),
-            int(bike["position"]["y"]),
+            int(bike["position"]["x"]) & 0xFFFFFFFF,  # Ensure x position fits within 32-bit range
+            int(bike["position"]["y"]) & 0xFFFFFFFF,  # Ensure y position fits within 32-bit range
             bool(bike["status"])
         ) for bike in game_state["bikes"]
     ]
     obstacles = [
         struct.pack(
             ">iII",  # Format: int (type), int (x), int (y)
-            obstacle_type_map[obstacle["type"]],  # Map "type" to an integer
-            int(obstacle["position"]["x"]),
-            int(obstacle["position"]["y"])
+            int(obstacle_type_map[obstacle["type"]]), # Map "type" to an integer
+            int(obstacle["position"]["x"]) & 0xFFFFFFFF, # Ensure x fits within 32-bit range
+            int(obstacle["position"]["y"]) & 0xFFFFFFFF  # Ensure y fits within 32-bit range
         ) for obstacle in game_state["obstacles"]
     ]
     return b''.join(bikes + obstacles)
+
 
 
 # Compress data to reduce packet size
