@@ -79,21 +79,31 @@ def listen_and_render(client_socket, id, controller):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
+                print("[DEBUG] Quit event detected. Exiting game loop.")
                 break
+
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_w:
                     controller.y = -1
+                    print("[DEBUG] W key down - moving up. Controller y:", controller.y)
                 elif event.key == pygame.K_s:
                     controller.y = 1
+                    print("[DEBUG] S key down - moving down. Controller y:", controller.y)
                 elif event.key == pygame.K_a:
                     controller.x = -1
+                    print("[DEBUG] A key down - moving left. Controller x:", controller.x)
                 elif event.key == pygame.K_d:
                     controller.x = 1
+                    print("[DEBUG] D key down - moving right. Controller x:", controller.x)
+
             elif event.type == pygame.KEYUP:
                 if event.key in {pygame.K_w, pygame.K_s}:
                     controller.y = 0
+                    print("[DEBUG] W or S key up - stopping vertical movement. Controller y:", controller.y)
                 if event.key in {pygame.K_a, pygame.K_d}:
                     controller.x = 0
+                    print("[DEBUG] A or D key up - stopping horizontal movement. Controller x:", controller.x)
+
 
         # Clear the screen for a new frame
         screen.fill((0, 0, 0))  # Black background
