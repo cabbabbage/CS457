@@ -1,9 +1,10 @@
-import struct
+import socket
+import json
 from images import *
 from hitbox import Hitbox
 
 class Bike:
-    def __init__(self, width, height, reader, writer):
+    def __init__(self, width, height, client_socket, addr):
         self.active = True
         self.type = "bike"
         self.img = bike
@@ -11,48 +12,47 @@ class Bike:
         self.y = height - 300
         self.body_angle = 0
         self.standard_shoulders = None
-        self.reader = reader  # StreamReader for receiving data
-        self.writer = writer  # StreamWriter for sending data
+        self.client_socket = client_socket
         self.score = 0
         self.width = width
         self.height = height
+        self.client_ip = addr
         self.last_x = 0
         self.last_y = 0
         self.id = 0
+        self.buffer = ""  # Buffer for partial JSON data
 
-        # Initialize hitbox attributes
-        self.hitbox_top = 0
-        self.hitbox_bottom = 0
-        self.hitbox_left = 0
-        self.hitbox_right = 0
-
-    async def update(self):
+    def update(self):
         mult = 5  # Movement multiplier
         try:
-            # Read data asynchronously from the client
-            data = await self.reader.read(12)  # Expecting exactly 12 bytes for ID, x, and y
-            if len(data) == 12:
-                # Unpack the data from binary format
-                received_id, x, y = struct.unpack(">Iii", data)
+            # Attempt to receive data from client
+            data = self.client_socket.recv(1024).decode("utf-8")
+            if data:
+                # Append received data to buffer
+                self.buffer += data
 
-                # Check if the received ID matches the bike's ID
-                if received_id == self.id:
-                    # Apply movement based on x and y values
-                    self.x += int(x) * mult
-                    self.y += int(y) * mult
+                # Process complete JSON objects in the buffer
+                while True:
+                    try:
+                        # Parse one JSON object from the buffer
+                        parsed_data, index = json.JSONDecoder().raw_decode(self.buffer)
+                        self.buffer = self.buffer[index:].lstrip()  # Remove parsed JSON object from buffer
 
-                    # Update last known values
-                    self.last_x = x
-                    self.last_y = y
-                    print(f"[DEBUG] Updated position: x={self.x}, y={self.y}")
-                else:
-                    print(f"[WARNING] ID mismatch: received {received_id}, expected {self.id}")
-            else:
-                print(f"[ERROR] Unexpected data length: received {len(data)} bytes")
+                        # Extract movement data
+                        self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
 
-        except (ValueError, ConnectionResetError) as e:
+                        # Apply movement based on x and y values
+                        self.x += int(x) * mult
+                        self.y += int(y) * mult
+
+                        # Update last known values
+                        self.last_x = x
+                        self.last_y = y
+                    except json.JSONDecodeError:
+                        # Exit loop if there's incomplete data left in the buffer
+                        break
+        except (socket.error, ValueError) as e:
             # On error, fallback to last known x and y values
-            print(f"[ERROR] Connection or parsing issue: {e}")
             self.x += self.last_x * mult
             self.y += self.last_y * mult
 
