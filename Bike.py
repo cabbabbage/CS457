@@ -3,7 +3,7 @@ from images import *
 from hitbox import Hitbox
 
 class Bike:
-    def __init__(self, width, height, reader, writer, addr):
+    def __init__(self, width, height, reader, writer):
         self.active = True
         self.type = "bike"
         self.img = bike
@@ -16,7 +16,6 @@ class Bike:
         self.score = 0
         self.width = width
         self.height = height
-        self.client_ip = addr
         self.last_x = 0
         self.last_y = 0
         self.id = 0
