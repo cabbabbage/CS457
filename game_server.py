@@ -56,7 +56,7 @@ async def handle_client(reader, writer):
     width, height = 1920, 1080
     addr = writer.get_extra_info('peername')
   
-    player_bike = Bike(width, height, writer, addr)
+    player_bike = Bike(width, height, reader, writer)  # Pass `reader` and `writer`
 
     players.append(player_bike)  # Add bike to players list
 
@@ -76,8 +76,8 @@ async def handle_client(reader, writer):
                 if obstacle.active:
                     obstacle.update()
 
-        # Update player bike
-        await player_bike.update() 
+        # Await `player_bike.update()` as it is now asynchronous
+        await player_bike.update()
         player_bike.score += 0.1
 
         # Check for collisions

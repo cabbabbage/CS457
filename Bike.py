@@ -21,6 +21,12 @@ class Bike:
         self.id = 0
         self.buffer = ""  # Buffer for partial JSON data
 
+        # Initialize hitbox attributes
+        self.hitbox_top = 0
+        self.hitbox_bottom = 0
+        self.hitbox_left = 0
+        self.hitbox_right = 0
+
     async def update(self):
         mult = 5  # Movement multiplier
         try:
@@ -50,7 +56,7 @@ class Bike:
                     except json.JSONDecodeError:
                         # Exit loop if there's incomplete data left in the buffer
                         break
-        except (ValueError, ConnectionResetError) as e:
+        except (ValueError, ConnectionResetError):
             # On error, fallback to last known x and y values
             self.x += self.last_x * mult
             self.y += self.last_y * mult
