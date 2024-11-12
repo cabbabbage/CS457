@@ -1,10 +1,9 @@
-import socket
 import json
 from images import *
 from hitbox import Hitbox
 
 class Bike:
-    def __init__(self, width, height, client_socket, addr):
+    def __init__(self, width, height, reader, writer, addr):
         self.active = True
         self.type = "bike"
         self.img = bike
@@ -12,7 +11,8 @@ class Bike:
         self.y = height - 300
         self.body_angle = 0
         self.standard_shoulders = None
-        self.client_socket = client_socket
+        self.reader = reader  # StreamReader for receiving data
+        self.writer = writer  # StreamWriter for sending data
         self.score = 0
         self.width = width
         self.height = height
@@ -22,14 +22,14 @@ class Bike:
         self.id = 0
         self.buffer = ""  # Buffer for partial JSON data
 
-    def update(self):
+    async def update(self):
         mult = 5  # Movement multiplier
         try:
-            # Attempt to receive data from client
-            data = self.client_socket.recv(1024).decode("utf-8")
+            # Attempt to receive data asynchronously from the client
+            data = await self.reader.read(1024)
             if data:
-                # Append received data to buffer
-                self.buffer += data
+                # Decode and append received data to buffer
+                self.buffer += data.decode("utf-8")
 
                 # Process complete JSON objects in the buffer
                 while True:
@@ -51,7 +51,7 @@ class Bike:
                     except json.JSONDecodeError:
                         # Exit loop if there's incomplete data left in the buffer
                         break
-        except (socket.error, ValueError) as e:
+        except (ValueError, ConnectionResetError) as e:
             # On error, fallback to last known x and y values
             self.x += self.last_x * mult
             self.y += self.last_y * mult
