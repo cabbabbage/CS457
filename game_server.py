@@ -27,6 +27,9 @@ def game_setup():
 
 # Function to serialize game state in binary format
 def serialize_game_state(game_state):
+    # Mapping obstacle types to integer values
+    obstacle_type_map = {"tree": 0, "rabbit": 1}
+
     bikes = [
         struct.pack(
             ">Ifii?",  # Format: int (id), float (score), int (x), int (y), bool (status)
@@ -40,9 +43,9 @@ def serialize_game_state(game_state):
     obstacles = [
         struct.pack(
             ">iII",  # Format: int (type), int (x), int (y)
-            int(obstacle["type"]),  # Ensure "type" is an integer
-            int(obstacle["position"]["x"]),  # Ensure "x" is an integer
-            int(obstacle["position"]["y"])   # Ensure "y" is an integer
+            obstacle_type_map[obstacle["type"]],  # Map "type" to an integer
+            int(obstacle["position"]["x"]),
+            int(obstacle["position"]["y"])
         ) for obstacle in game_state["obstacles"]
     ]
     return b''.join(bikes + obstacles)
