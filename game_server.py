@@ -77,7 +77,7 @@ async def handle_client(reader, writer):
                     obstacle.update()
 
         # Update player bike
-        player_bike.update()
+        await player_bike.update() 
         player_bike.score += 0.1
 
         # Check for collisions
