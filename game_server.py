@@ -146,12 +146,11 @@ async def start_server():
     addr = server.sockets[0].getsockname()
     print(f"Server listening on {addr}")
 
-    server.start_serving()
-    await server.wait_closed()
-
+    # Start the server and run indefinitely
+    while True:
+        await asyncio.sleep(3600)  # Keep the server running
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server())
     loop.run_forever()
-
