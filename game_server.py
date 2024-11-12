@@ -146,8 +146,9 @@ async def start_server():
     addr = server.sockets[0].getsockname()
     print(f"Server listening on {addr}")
 
-    async with server:
-        await server.serve_forever()
+    server.start_serving()
+    await server.wait_closed()
+
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
