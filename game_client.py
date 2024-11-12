@@ -4,7 +4,8 @@ import os
 import numpy as np
 import socket
 import pygame
-import json
+import zlib
+import struct
 import threading
 import random
 import time
@@ -24,6 +25,10 @@ print("[DEBUG] Full-screen mode with dimensions:", client_width, "x", client_hei
 
 def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
+
+def is_on_screen(position):
+    x, y = position
+    return 0 <= x < client_width and 0 <= y < client_height
 
 # Ensure assets are loaded correctly
 rabbits = [rabbit] * 4
@@ -48,12 +53,16 @@ def listen_and_render(client_socket, id, controller):
         nonlocal game_over, game_state
         while not game_over:
             try:
-                data = client_socket.recv(2048)  # Increase buffer size if needed
+                data = client_socket.recv(4096)  # Increase buffer size if needed
                 if not data:
                     print("[DEBUG] Lost connection to server.")
                     game_over = True
                     break
-                game_state = json.loads(data.decode("utf-8"))
+
+                # Decompress and deserialize the data
+                decompressed_data = zlib.decompress(data)
+                game_state = deserialize_game_state(decompressed_data)
+
             except socket.error as e:
                 print(f"[ERROR] Error receiving data from server: {e}")
                 game_over = True
@@ -92,25 +101,27 @@ def listen_and_render(client_socket, id, controller):
         r, t, o = 0, 0, 0
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
-            if bike_info["id"] == id:
-                screen.blit(player, bike_pos)
-            else:
-                screen.blit(ops[o % len(ops)], bike_pos)
-                o += 1
+            if is_on_screen(bike_pos):
+                if bike_info["id"] == id:
+                    screen.blit(player, bike_pos)
+                else:
+                    screen.blit(ops[o % len(ops)], bike_pos)
+                    o += 1
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
             pos = scale_position(obstacle_info["position"]["x"], obstacle_info["position"]["y"])
-            if obstacle_info["type"] == "rabbit":
-                screen.blit(rabbits[r % len(rabbits)], pos)
-                r += 1
-            elif obstacle_info["type"] == "tree":
-                screen.blit(trees[t % len(trees)], pos)
-                t += 1
+            if is_on_screen(pos):
+                if obstacle_info["type"] == "rabbit":
+                    screen.blit(rabbits[r % len(rabbits)], pos)
+                    r += 1
+                elif obstacle_info["type"] == "tree":
+                    screen.blit(trees[t % len(trees)], pos)
+                    t += 1
 
-        # Send controller updates to server
-        data = json.dumps({"id": id, "x": controller.x, "y": controller.y})
-        client_socket.sendall(data.encode("utf-8"))
+        # Send controller updates to server in binary format
+        controller_data = struct.pack(">Iii", id, controller.x, controller.y)
+        client_socket.sendall(controller_data)
 
         pygame.display.flip()
         clock.tick(60)  # Limit to 60 FPS
@@ -127,6 +138,35 @@ def game_over_screen():
     pygame.quit()
     print("[DEBUG] Game over screen displayed. Exiting game.")
     quit()
+
+# Deserialize binary game state from server
+def deserialize_game_state(data):
+    game_state = {"bikes": [], "obstacles": []}
+    offset = 0
+
+    # Deserialize bikes
+    num_bikes = (len(data) - offset) // struct.calcsize(">Ifii?")
+    for _ in range(num_bikes):
+        bike_id, score, x, y, status = struct.unpack_from(">Ifii?", data, offset)
+        offset += struct.calcsize(">Ifii?")
+        game_state["bikes"].append({
+            "id": bike_id,
+            "score": score,
+            "position": {"x": x, "y": y},
+            "status": status
+        })
+
+    # Deserialize obstacles
+    while offset < len(data):
+        type_id, x, y = struct.unpack_from(">iII", data, offset)
+        offset += struct.calcsize(">iII")
+        obstacle_type = "rabbit" if type_id == 1 else "tree"
+        game_state["obstacles"].append({
+            "type": obstacle_type,
+            "position": {"x": x, "y": y}
+        })
+
+    return game_state
 
 class Controller:
     def __init__(self):

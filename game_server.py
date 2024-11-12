@@ -1,8 +1,9 @@
 import socket
 import json
 import random
-import time
-from threading import Thread, Lock
+import struct
+import zlib
+import asyncio
 
 from Tree import Tree
 from Rabbit import Rabbit
@@ -16,7 +17,6 @@ PORT = 38901
 players = []  # Shared list of player bikes
 obstacles = []  # Shared list of obstacles
 game_started = False  # Flag to indicate when the game has started
-lock = Lock()  # Lock to handle shared resources
 
 def game_setup():
     height = 1080
@@ -25,35 +25,62 @@ def game_setup():
     obstacles.extend([Rabbit(width, height) for _ in range(4)])
     return obstacles
 
-def handle_client(client_socket, addr):
+# Function to serialize game state in binary format
+def serialize_game_state(game_state):
+    bikes = [
+        struct.pack(
+            ">Ifii?",  # Format: int (id), float (score), int (x), int (y), bool (status)
+            bike["id"],
+            bike["score"],
+            bike["position"]["x"],
+            bike["position"]["y"],
+            bike["status"]
+        ) for bike in game_state["bikes"]
+    ]
+    obstacles = [
+        struct.pack(
+            ">iII",  # Format: int (type), int (x), int (y)
+            obstacle["type"],
+            obstacle["position"]["x"],
+            obstacle["position"]["y"]
+        ) for obstacle in game_state["obstacles"]
+    ]
+    return b''.join(bikes + obstacles)
+
+# Compress data to reduce packet size
+def compress_data(data):
+    return zlib.compress(data)
+
+async def handle_client(reader, writer):
     global game_started
     width, height = 1920, 1080
+    addr = writer.get_extra_info('peername')
   
-    player_bike = Bike(width, height, client_socket, addr)
+    player_bike = Bike(width, height, writer, addr)
 
-    with lock:
-        players.append(player_bike)  # Add bike to players list
+    players.append(player_bike)  # Add bike to players list
 
-    with lock:
-        if not game_started:
-            game_started = True
+    if not game_started:
+        game_started = True
 
     running = True
+    previous_state = None
     while running:
         if game_started:
+            # Activate and update obstacles
             for obstacle in obstacles:
                 if not obstacle.active:
                     obstacle.activate()
-
                     break
-
             for obstacle in obstacles:
                 if obstacle.active:
                     obstacle.update()
 
+        # Update player bike
         player_bike.update()
         player_bike.score += 0.1
 
+        # Check for collisions
         for obstacle in obstacles:
             if obstacle.active:
                 if (player_bike.hitbox_right > obstacle.hitbox_left and player_bike.hitbox_left < obstacle.hitbox_right):
@@ -62,6 +89,7 @@ def handle_client(client_socket, addr):
                         running = False
                         break
 
+        # Construct the game state
         game_state = {
             "bikes": [
                 {
@@ -79,33 +107,47 @@ def handle_client(client_socket, addr):
             "game_over": not player_bike.active
         }
 
+        # Send only delta if possible
+        delta_state = game_state if previous_state is None else get_delta_state(game_state, previous_state)
+        previous_state = game_state
+
+        # Serialize and compress game state
+        serialized_state = serialize_game_state(delta_state)
+        compressed_state = compress_data(serialized_state)
+
+        # Send compressed binary data to client
         try:
-            client_socket.sendall(json.dumps(game_state).encode("utf-8"))
+            writer.write(compressed_state)
+            await writer.drain()
         except (ConnectionResetError, BrokenPipeError):
             break
 
-        time.sleep(1 / 20)  
+        await asyncio.sleep(1 / 20)  # Maintain the game tick rate
 
-    with lock:
-        players.remove(player_bike)
+    players.remove(player_bike)
+    writer.close()
+    await writer.wait_closed()
 
-    client_socket.close()
+def get_delta_state(current_state, previous_state):
+    delta_state = {"bikes": [], "obstacles": []}
+    for current_bike, previous_bike in zip(current_state["bikes"], previous_state["bikes"]):
+        if current_bike["position"] != previous_bike["position"] or current_bike["status"] != previous_bike["status"]:
+            delta_state["bikes"].append(current_bike)
+    for current_obstacle, previous_obstacle in zip(current_state["obstacles"], previous_state["obstacles"]):
+        if current_obstacle["position"] != previous_obstacle["position"]:
+            delta_state["obstacles"].append(current_obstacle)
+    return delta_state
 
-def start_server():
+async def start_server():
     global obstacles
     obstacles = game_setup()
 
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((HOST, PORT))
-    server_socket.listen(5)
+    server = await asyncio.start_server(handle_client, HOST, PORT)
+    addr = server.sockets[0].getsockname()
+    print(f"Server listening on {addr}")
 
-    server_ip, server_port = server_socket.getsockname()
-    print(f"Server listening on {server_ip}:{server_port}")
-
-    while True:
-        client_socket, addr = server_socket.accept()
-        client_thread = Thread(target=handle_client, args=(client_socket, addr,))
-        client_thread.start()
+    async with server:
+        await server.serve_forever()
 
 if __name__ == "__main__":
-    start_server()
+    asyncio.run(start_server())
