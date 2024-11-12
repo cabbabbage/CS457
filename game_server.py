@@ -74,7 +74,7 @@ async def handle_client(reader, writer):
             for obstacle in obstacles:
                 if obstacle.active:
                     obstacle.update()
-                    print(obstacle.get_position())
+                    print(str(obstacle.get_position()))
                     
 
         # Await `player_bike.update()` as it is now asynchronous
