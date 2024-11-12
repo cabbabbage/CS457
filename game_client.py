@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import os
@@ -27,7 +28,6 @@ def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
 
 def is_on_screen(position):
-    print(position)
     x, y = position
     return 0 <= x < client_width and 0 <= y < client_height
 
@@ -95,20 +95,20 @@ def listen_and_render(client_socket, id, controller):
                 if event.key in {pygame.K_a, pygame.K_d}:
                     controller.x = 0
 
-        # Clear the screen
+        # Clear the screen for a new frame
         screen.fill((0, 0, 0))  # Black background
 
-        # Draw bikes from game state
+        # Draw bikes on screen regardless of position change
         r, t, o = 0, 0, 0
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
-            if is_on_screen(bike_pos):
-
-                if bike_info["id"] == id:
-                    screen.blit(player, bike_pos)
-                else:
-                    screen.blit(ops[o % len(ops)], bike_pos)
-                    o += 1
+            if bike_info["id"] == id:
+                # Draw the player's bike
+                screen.blit(player, bike_pos)
+            else:
+                # Draw opponent bikes
+                screen.blit(ops[o % len(ops)], bike_pos)
+                o += 1
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
@@ -146,11 +146,14 @@ def deserialize_game_state(data):
     game_state = {"bikes": [], "obstacles": []}
     offset = 0
 
+    # Define the expected sizes for each data structure
+    bike_size = struct.calcsize(">Ifii?")
+    obstacle_size = struct.calcsize(">iII")
+
     # Deserialize bikes
-    num_bikes = (len(data) - offset) // struct.calcsize(">Ifii?")
-    for _ in range(num_bikes):
+    while offset + bike_size <= len(data):
         bike_id, score, x, y, status = struct.unpack_from(">Ifii?", data, offset)
-        offset += struct.calcsize(">Ifii?")
+        offset += bike_size
         game_state["bikes"].append({
             "id": bike_id,
             "score": score,
@@ -159,9 +162,9 @@ def deserialize_game_state(data):
         })
 
     # Deserialize obstacles
-    while offset < len(data):
+    while offset + obstacle_size <= len(data):
         type_id, x, y = struct.unpack_from(">iII", data, offset)
-        offset += struct.calcsize(">iII")
+        offset += obstacle_size
         obstacle_type = "rabbit" if type_id == 1 else "tree"
         game_state["obstacles"].append({
             "type": obstacle_type,
@@ -169,6 +172,7 @@ def deserialize_game_state(data):
         })
 
     return game_state
+
 
 class Controller:
     def __init__(self):

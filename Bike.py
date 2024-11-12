@@ -44,7 +44,7 @@ class Bike:
                         self.buffer = self.buffer[index:].lstrip()  # Remove parsed JSON object from buffer
 
                         # Extract movement data
-                        self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+                        self.id, x, y = parsed_data.get("id"), parsed_data.get("x", self.last_x), parsed_data.get("y", self.last_y)
 
                         # Apply movement based on x and y values
                         self.x += int(x) * mult
