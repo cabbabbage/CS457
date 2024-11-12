@@ -54,7 +54,6 @@ def compress_data(data):
 async def handle_client(reader, writer):
     global game_started
     width, height = 1920, 1080
-    addr = writer.get_extra_info('peername')
   
     player_bike = Bike(width, height, reader, writer)  # Pass `reader` and `writer`
 
@@ -75,6 +74,8 @@ async def handle_client(reader, writer):
             for obstacle in obstacles:
                 if obstacle.active:
                     obstacle.update()
+                    print(obstacle.get_position())
+                    
 
         # Await `player_bike.update()` as it is now asynchronous
         await player_bike.update()

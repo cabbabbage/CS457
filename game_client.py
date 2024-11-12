@@ -27,6 +27,7 @@ def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
 
 def is_on_screen(position):
+    print(position)
     x, y = position
     return 0 <= x < client_width and 0 <= y < client_height
 
@@ -102,6 +103,7 @@ def listen_and_render(client_socket, id, controller):
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
             if is_on_screen(bike_pos):
+
                 if bike_info["id"] == id:
                     screen.blit(player, bike_pos)
                 else:
