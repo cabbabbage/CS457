@@ -59,7 +59,7 @@ def handle_client(client_socket, addr):
                 if (player_bike.hitbox_right > obstacle.hitbox_left and player_bike.hitbox_left < obstacle.hitbox_right):
                     if (player_bike.hitbox_bottom > obstacle.hitbox_top and player_bike.hitbox_top < obstacle.hitbox_bottom):
                         player_bike.active = False
-                        running = False
+                        switch_player()
                         break
 
         game_state = {
@@ -68,7 +68,7 @@ def handle_client(client_socket, addr):
                     "type": bike.type,
                     "position": {"x": bike.x, "y": bike.y},
                     "score": bike.score,
-                    "status": bike.active,
+                    "status": bike.playing,
                     "id": bike.id
                 } for bike in players
             ],

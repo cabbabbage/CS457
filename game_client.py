@@ -91,11 +91,13 @@ def listen_and_render(client_socket, id, controller):
         r, t, o = 0, 0, 0
         for bike_info in game_state.get("bikes", []):
             bike_pos = scale_position(bike_info["position"]["x"], bike_info["position"]["y"])
-            if bike_info["id"] == id:
-                screen.blit(player, bike_pos)
-            else:
-                screen.blit(ops[o % len(ops)], bike_pos)
-                o += 1
+            if bike_info["status"] == True:    
+                data = json.dumps({"id": id, "x": controller.x, "y": controller.y})
+                client_socket.sendall(data.encode("utf-8"))      
+            screen.blit(player, bike_pos)
+            #else:
+                #screen.blit(ops[o % len(ops)], bike_pos)
+                #o += 1
 
         # Draw obstacles from game state
         for obstacle_info in game_state.get("obstacles", []):
@@ -108,8 +110,7 @@ def listen_and_render(client_socket, id, controller):
                 t += 1
 
         # Send controller updates to server
-        data = json.dumps({"id": id, "x": controller.x, "y": controller.y})
-        client_socket.sendall(data.encode("utf-8"))
+
 
         pygame.display.flip()
         clock.tick(60)  # Limit to 60 FPS
