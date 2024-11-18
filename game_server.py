@@ -1,162 +1,203 @@
 import socket
 import json
 import random
-import struct
-import zlib
-import asyncio
+import time
+import argparse
+from threading import Thread, Lock
 
 from Tree import Tree
 from Rabbit import Rabbit
 from Bike import Bike
 
-# Game constants
-HOST = socket.gethostbyname(socket.gethostname())  # Get the local IP address
-PORT = 38901
-
 # Globals
 players = []  # Shared list of player bikes
 obstacles = []  # Shared list of obstacles
 game_started = False  # Flag to indicate when the game has started
+lock = Lock()
+run_state = 3  # Default to waiting for players
+
+# States:
+# 0: Running (normal gameplay loop)
+# 1: Countdown/swap (collision detected, wait for 5 seconds)
+# 2: Final (game over, show results for 10 seconds)
+# 3: Waiting for players (waiting screen)
+
+def obstacle_reset():
+    """
+    Resets all obstacles to an inactive state and randomizes their start positions.
+    """
+    for obstacle in obstacles:
+        obstacle.active = False
+        obstacle.rnd_start()
 
 def game_setup():
+    """
+    Sets up the initial game environment with obstacles.
+    """
     height = 1080
     width = 1920
     obstacles = [Tree(width, height) for _ in range(20)]
     obstacles.extend([Rabbit(width, height) for _ in range(4)])
     return obstacles
 
-# Function to serialize game state in binary format
-def serialize_game_state(game_state):
-    # Mapping obstacle types to integer values
-    obstacle_type_map = {"tree": 0, "rabbit": 1}
+def switch_player():
+    """
+    Switches the active player and handles the transition to run_state = 1 or run_state = 2.
+    """
+    global run_state
+    with lock:
+        for i, player in enumerate(players):
+            if player.status:
+                player.status = False
+                player.active = False
+                if i + 1 < len(players):
+                    players[i + 1].status = True
+                    players[i + 1].active = True
+                    run_state = 1  # Set countdown state
+                else:
+                    run_state = 2  # No more players, final state
+                print(f"[DEBUG] Switched player. New run_state: {run_state}")
+                return
 
-    bikes = [
-        struct.pack(
-            ">Ifii?",  # Format: int (id), float (score), int (x), int (y), bool (status)
-            int(bike["id"]) & 0xFFFFFFFF,             # Ensure ID fits within 32-bit integer range
-            float(bike["score"]),
-            int(bike["position"]["x"]) & 0xFFFFFFFF,  # Ensure x position fits within 32-bit range
-            int(bike["position"]["y"]) & 0xFFFFFFFF,  # Ensure y position fits within 32-bit range
-            bool(bike["status"])
-        ) for bike in game_state["bikes"]
-    ]
-    obstacles = [
-        struct.pack(
-            ">iII",  # Format: int (type), int (x), int (y)
-            int(obstacle_type_map[obstacle["type"]]), # Map "type" to an integer
-            int(obstacle["position"]["x"]) & 0xFFFFFFFF, # Ensure x fits within 32-bit range
-            int(obstacle["position"]["y"]) & 0xFFFFFFFF  # Ensure y fits within 32-bit range
-        ) for obstacle in game_state["obstacles"]
-    ]
-    return b''.join(bikes + obstacles)
+def handle_client(client_socket, addr):
+    global game_started, run_state
+    print(f"[INFO] Client connected: {addr}")
 
-
-
-# Compress data to reduce packet size
-def compress_data(data):
-    return zlib.compress(data)
-
-async def handle_client(reader, writer):
-    global game_started
     width, height = 1920, 1080
-  
-    player_bike = Bike(width, height, reader, writer)  # Pass `reader` and `writer`
+    player_bike = Bike(width, height, client_socket, addr)
 
-    players.append(player_bike)  # Add bike to players list
+    with lock:
+        players.append(player_bike)
 
-    if not game_started:
-        game_started = True
+        # Initialize players and start the game
+        if len(players) == 1:
+            players[0].status = True
+            players[0].active = True
+            print("[INFO] Waiting for second player...")
+        elif len(players) == 2:
+            game_started = True
+            run_state = 0  # Transition to game running state
+            for player in players:
+                player.active = True
+            print("[INFO] Both players connected. Starting game!")
 
     running = True
-    previous_state = None
     while running:
-        if game_started:
-            # Activate and update obstacles
-            for obstacle in obstacles:
-                if not obstacle.active:
-                    obstacle.activate()
-                    break
-            for obstacle in obstacles:
-                if obstacle.active:
-                    obstacle.update()
-                    print(str(obstacle.get_position()))
-                    
-
-        # Await `player_bike.update()` as it is now asynchronous
-        await player_bike.update()
-        player_bike.score += 0.1
-
-        # Check for collisions
-        for obstacle in obstacles:
-            if obstacle.active:
-                if (player_bike.hitbox_right > obstacle.hitbox_left and player_bike.hitbox_left < obstacle.hitbox_right):
-                    if (player_bike.hitbox_bottom > obstacle.hitbox_top and player_bike.hitbox_top < obstacle.hitbox_bottom):
-                        player_bike.active = False
-                        running = False
-                        break
-
-        # Construct the game state
-        game_state = {
-            "bikes": [
-                {
-                    "type": bike.type,
-                    "position": {"x": bike.x, "y": bike.y},
-                    "score": bike.score,
-                    "status": bike.active,
-                    "id": bike.id
-                } for bike in players
-            ],
-            "obstacles": [
-                {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
-                for obstacle in obstacles if obstacle.active
-            ],
-            "game_over": not player_bike.active
-        }
-
-        # Send only delta if possible
-        delta_state = game_state if previous_state is None else get_delta_state(game_state, previous_state)
-        previous_state = game_state
-
-        # Serialize and compress game state
-        serialized_state = serialize_game_state(delta_state)
-        compressed_state = compress_data(serialized_state)
-
-        # Send compressed binary data to client
         try:
-            writer.write(compressed_state)
-            await writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
-            break
+            with lock:
+                current_run_state = run_state  # Avoid race conditions
 
-        await asyncio.sleep(1 / 20)  # Maintain the game tick rate
+            if current_run_state == 0:
+                # Normal gameplay loop
+                print("[DEBUG] Game running (run_state = 0)")
+                for obstacle in obstacles:
+                    if not obstacle.active:
+                        obstacle.activate()
+                        break
+                for obstacle in obstacles:
+                    if obstacle.active:
+                        obstacle.update()
 
-    players.remove(player_bike)
-    writer.close()
-    await writer.wait_closed()
+                player_bike.update()
+                player_bike.score += 0.1
 
-def get_delta_state(current_state, previous_state):
-    delta_state = {"bikes": [], "obstacles": []}
-    for current_bike, previous_bike in zip(current_state["bikes"], previous_state["bikes"]):
-        if current_bike["position"] != previous_bike["position"] or current_bike["status"] != previous_bike["status"]:
-            delta_state["bikes"].append(current_bike)
-    for current_obstacle, previous_obstacle in zip(current_state["obstacles"], previous_state["obstacles"]):
-        if current_obstacle["position"] != previous_obstacle["position"]:
-            delta_state["obstacles"].append(current_obstacle)
-    return delta_state
+                # Check for collisions
+                for obstacle in obstacles:
+                    if obstacle.active:
+                        if (player_bike.hitbox_right > obstacle.hitbox_left and 
+                            player_bike.hitbox_left < obstacle.hitbox_right and
+                            player_bike.hitbox_bottom > obstacle.hitbox_top and 
+                            player_bike.hitbox_top < obstacle.hitbox_bottom):
+                            print("[DEBUG] Collision detected!")
+                            player_bike.active = False
+                            switch_player()
+                            obstacle_reset()
+                            break
 
-async def start_server():
+            elif current_run_state == 1:
+                # Countdown state
+                print("[DEBUG] Switching players (run_state = 1)")
+                time.sleep(5)
+                with lock:
+                    run_state = 0
+
+            elif current_run_state == 2:
+                # Final state
+                print("[DEBUG] Game over (run_state = 2)")
+                time.sleep(10)
+                with lock:
+                    game_started = False
+                    run_state = 3  # Reset to waiting state
+                    obstacle_reset()
+
+            elif current_run_state == 3:
+                # Waiting for players
+                print("[DEBUG] Waiting for players (run_state = 3)")
+                time.sleep(1 / 20)  # 20 FPS
+            elif current_run_state == 0:
+                # Waiting for players
+                print("[DEBUG] Running (run_state = 0)")
+                time.sleep(1 / 20)  # 20 FPS
+
+            # Prepare game state for the client
+            game_state = {
+                "bikes": [
+                    {
+                        "type": bike.type,
+                        "position": {"x": bike.x, "y": bike.y},
+                        "score": bike.score,
+                        "status": bike.status,
+                        "id": bike.id,
+                    }
+                    for bike in players
+                ],
+                "obstacles": [
+                    {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
+                    for obstacle in obstacles if obstacle.active
+                ],
+                "run_state": current_run_state,
+            }
+
+            try:
+                client_socket.sendall(json.dumps(game_state).encode("utf-8"))
+            except (ConnectionResetError, BrokenPipeError):
+                print(f"[ERROR] Connection lost with client: {addr}")
+                #running = False
+
+        except Exception as e:
+            print(f"[ERROR] Exception in game loop: {e}")
+            import traceback
+            traceback.print_exc()
+            #running = False
+
+    # Cleanup after disconnection
+    with lock:
+        players.remove(player_bike)
+    client_socket.close()
+    print(f"[INFO] Client disconnected: {addr}")
+
+
+def start_server(host, port):
+    """
+    Starts the server and listens for client connections.
+    """
     global obstacles
     obstacles = game_setup()
 
-    server = await asyncio.start_server(handle_client, HOST, PORT)
-    addr = server.sockets[0].getsockname()
-    print(f"Server listening on {addr}")
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((host, port))
+    server_socket.listen(5)
 
-    # Start the server and run indefinitely
+    print(f"[INFO] Server listening on {host}:{port}")
+
     while True:
-        await asyncio.sleep(3600)  # Keep the server running
+        client_socket, addr = server_socket.accept()
+        client_thread = Thread(target=handle_client, args=(client_socket, addr))
+        client_thread.start()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(start_server())
-    loop.run_forever()
+    parser = argparse.ArgumentParser(description="Start the game server.")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host address")
+    parser.add_argument("--port", type=int, default=38901, help="Server port")
+    args = parser.parse_args()
+    start_server(args.host, args.port)

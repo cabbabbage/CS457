@@ -1,3 +1,4 @@
+
 # CS457 Media Pipe Runner
 
 ## Team:
@@ -33,6 +34,51 @@ The objective of this project is to utilize **MediaPipe** to detect player contr
 - A **client-server architecture** that supports multiplayer turn-based gameplay.
 - **Documentation** detailing the installation, setup, and usage of the game.
 - A final presentation or demo showcasing the implemented features.
+
+---
+
+## Instructions to Run the Server and Client:
+
+### Running the Server:
+1. Navigate to the directory containing `game_server.py`:
+   ```bash
+   cd /path/to/your/project
+   ```
+2. Start the server using the following command:
+   ```bash
+   python game_server.py --host <SERVER_HOST> --port <SERVER_PORT>
+   ```
+   - Replace `<SERVER_HOST>` with the desired host (e.g., `0.0.0.0` to listen on all interfaces).
+   - Replace `<SERVER_PORT>` with the desired port (e.g., `38901`).
+
+   Example:
+   ```bash
+   python game_server.py --host 0.0.0.0 --port 38901
+   ```
+
+3. The server will log messages indicating its status, such as:
+   ```
+   [INFO] Server listening on 0.0.0.0:38901
+   ```
+
+### Running the Client:
+1. Navigate to the directory containing `game_client.py`:
+   ```bash
+   cd /path/to/your/project
+   ```
+2. Start the client using the following command:
+   ```bash
+   python game_client.py --host <SERVER_HOST> --port <SERVER_PORT>
+   ```
+   - Replace `<SERVER_HOST>` with the server's IP address.
+   - Replace `<SERVER_PORT>` with the server's port.
+
+   Example:
+   ```bash
+   python game_client.py --host 127.0.0.1 --port 38901
+   ```
+
+3. The client will connect to the server and begin processing game visuals and controls.
 
 ---
 
@@ -89,28 +135,22 @@ The objective of this project is to utilize **MediaPipe** to detect player contr
 
 ---
 
-## Assumptions:
-- A stable network connection between client and server will be available for data transmission.
-- All team members have access to the required hardware and software.
-- Gesture recognition via **MediaPipe** will be sufficiently accurate for basic game controls.
+## Server and Client Implementation:
 
----
-## Server and Client implementation:
-1. **Server Socket Creation:**:
-   - The Server utilizes the TCP Socket to listen for connecting clients.
+### Server:
+1. **Socket Creation**:
+   - The server uses a TCP socket to listen for incoming client connections.
+2. **Handling Client Connections**:
+   - A new thread is spawned for each client, using the `handle_client` method.
+3. **Game State Communication**:
+   - The server prepares the game state as a JSON object and sends it to the client.
 
-2. **Handling Client Connections:**:
-   - When a client connects to the server it spawns a new thread and using the handle_client Method
-     
-4. **Game State Communication:**:
-   - To communicate  game state the server prepares the relevant information as a JSON and then sends it to the client using the socket connection
-     
-5. **Client Socket Creation:**:
-   - The client is able to connect be specificing the host and port used.
-
-6. **User Interaction**:
-   - The user is able to input messages and send them to the server, or exit if needed
-   - The server will then receive the message and alter the game state
+### Client:
+1. **Socket Creation**:
+   - The client connects to the server using the specified host and port.
+2. **User Interaction**:
+   - The client processes MediaPipe input for player controls.
+   - The user interacts with the game via gesture controls, which are transmitted to the server.
 
 ---
 
