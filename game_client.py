@@ -59,8 +59,6 @@ def listen_and_render(client_socket, id, controller):
                 data = client_socket.recv(2048)  # Increase buffer size if needed
                 if not data:
                     print("[DEBUG] Lost connection to server.")
-                    game_over = True
-                    break
                 game_state = json.loads(data.decode("utf-8"))
                 run_state = game_state.get("run_state", 3)  # Update run_state from server
             except socket.error as e:
