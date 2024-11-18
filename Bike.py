@@ -21,6 +21,7 @@ class Bike:
         self.last_y = 0
         self.id = 0
         self.buffer = ""  # Buffer for partial JSON data
+        self.sttus = False
 
     def update(self):
         mult = 5  # Movement multiplier
