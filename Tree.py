@@ -9,7 +9,7 @@ class Tree:
         self.game_width = width
         self.type = "tree"
         self.rnd_start()
-        trees = [tree2]
+        trees = [car1, car2, car3]
         self.img = random.choice(trees)
         self.active = False
 
@@ -33,7 +33,7 @@ class Tree:
     def get_hitbox(self):
         # Tree-specific hitbox adjustments
         self.hitbox_top, self.hitbox_bottom, self.hitbox_left, self.hitbox_right = Hitbox.calculate_hitbox(
-            self.img, self.x, self.y, width_adjust=0, height_adjust=50)
+            self.img, self.x, self.y, width_adjust=0, height_adjust=0)
 
     def get_x(self):
         return self.x
