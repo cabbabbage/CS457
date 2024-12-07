@@ -13,32 +13,50 @@
 - Implemented robust error handling for UI operations.
 - Added safeguards for handling socket-related errors during client-server communication.
 - Ensured the server gracefully handles unexpected disconnections or malformed data.
+- Implemented mechanisms to catch and handle potential exceptions or unexpected situations:
+  - Managed **network errors** such as timeouts and connection drops.
+  - Validated and sanitized **user inputs** to prevent crashes from invalid or unexpected data.
+  - Provided **informative error messages** to users to improve usability and debugging.
 
 #### Comprehensive Testing:
 - Verified the functionality of every **game state** (e.g., lobby, active gameplay, and endgame).
 - Tested the **client inputs** thoroughly, including valid and invalid gesture inputs.
 - Simulated variable numbers of clients to ensure the server scales effectively and maintains synchronization.
+- Conducted **integration testing** to ensure all components (UI, server, client) work seamlessly together.
 - Explored and resolved **edge cases**, such as:
   - A client disconnecting mid-game.
   - Invalid or malformed data sent to the server.
   - Simultaneous disconnections or multiple clients joining at the same time.
+  - Unexpected user behaviors, such as spamming invalid inputs or dropping connections.
 
 #### UI Refactoring:
 - Redesigned the **game setup UI** for improved clarity and responsiveness.
 - Enhanced visual indicators for users, including clearer error messages and connection statuses.
+- Improved the usability of interactive elements, ensuring better flow during game setup.
 
 #### Enhanced Endgame Screen:
 - Added a more **informative endgame screen**:
   - Displaying individual player scores prominently.
-  - Declaring the winner clearly (or a tie when applicable).
+  - Declaring the winner clearly (or indicating a tie when applicable).
   - Countdown timer to indicate when the next game will start.
   - Improved the overall presentation for a more polished user experience.
 
-
-## Project Objective:
-The objective of this project is to transform a single-player runner game into a **true multiplayer experience** with a client-server architecture, robust error handling, thorough testing, and improved UI elements. Players connect to a central server that handles the game logic and streaming visuals, allowing multiple players to play simultaneously rather than taking turns.
-
 ---
+
+### Security/Risk Evaluation:
+- **Potential Security Issues**:
+  - **Unencrypted Data Transmission**: Game data, including player inputs, is transmitted in plain text, making it susceptible to interception.
+  - **Client Spoofing**: Without robust authentication, malicious clients could impersonate legitimate players.
+  - **Denial of Service (DoS) Attacks**: The server may be overwhelmed by a flood of invalid or excessive connections.
+  - **Code Injection**: Malicious users might exploit input handling to execute harmful commands or disrupt the game.
+
+- **Future Mitigations**:
+  - **Encryption**: Use protocols such as TLS to encrypt communication between clients and the server.
+  - **Authentication**: Implement token-based authentication to verify the legitimacy of connected clients.
+  - **Rate Limiting**: Add rate limiting to prevent spam or DoS attacks from overwhelming the server.
+  - **Input Validation**: Strengthen input validation and sanitization to prevent malicious data from affecting game logic.
+  - **Monitoring and Logging**: Set up server monitoring and logging to detect unusual activity and respond accordingly.
+
 
 ## Scope:
 
