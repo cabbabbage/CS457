@@ -41,8 +41,8 @@ class Tree:
         # Move the hitbox to the right and down by 25% of the image's width and height
         img_width = self.img.get_width()
         img_height = self.img.get_height()
-        x_offset = 0.35 * img_width  # Shift right by 25% of image width
-        y_offset = 0.75 * img_height  # Shift down by 25% of image height
+        x_offset = 0.75 * img_width  # Shift right by 25% of image width
+        y_offset = 0.65 * img_height  # Shift down by 25% of image height
 
         # Adjust hitbox boundaries
         self.hitbox_left = self.x + x_offset
