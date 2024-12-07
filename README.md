@@ -5,6 +5,36 @@
 - **Jake Liesendahl**
 - **Calvin Mickelson**
 
+## Sprint 5: What We Did
+
+### Key Achievements:
+
+#### Error Handling:
+- Implemented robust error handling for UI operations.
+- Added safeguards for handling socket-related errors during client-server communication.
+- Ensured the server gracefully handles unexpected disconnections or malformed data.
+
+#### Comprehensive Testing:
+- Verified the functionality of every **game state** (e.g., lobby, active gameplay, and endgame).
+- Tested the **client inputs** thoroughly, including valid and invalid gesture inputs.
+- Simulated variable numbers of clients to ensure the server scales effectively and maintains synchronization.
+- Explored and resolved **edge cases**, such as:
+  - A client disconnecting mid-game.
+  - Invalid or malformed data sent to the server.
+  - Simultaneous disconnections or multiple clients joining at the same time.
+
+#### UI Refactoring:
+- Redesigned the **game setup UI** for improved clarity and responsiveness.
+- Enhanced visual indicators for users, including clearer error messages and connection statuses.
+
+#### Enhanced Endgame Screen:
+- Added a more **informative endgame screen**:
+  - Displaying individual player scores prominently.
+  - Declaring the winner clearly (or a tie when applicable).
+  - Countdown timer to indicate when the next game will start.
+  - Improved the overall presentation for a more polished user experience.
+
+
 ## Project Objective:
 The objective of this project is to transform a single-player runner game into a **true multiplayer experience** with a client-server architecture, robust error handling, thorough testing, and improved UI elements. Players connect to a central server that handles the game logic and streaming visuals, allowing multiple players to play simultaneously rather than taking turns.
 
