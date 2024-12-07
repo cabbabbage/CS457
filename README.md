@@ -1,39 +1,35 @@
 
-# CS457 Media Pipe Runner
+# CS457 Multiplayer Runner Game
 
 ## Team:
 - **Jake Liesendahl**
 - **Calvin Mickelson**
 
 ## Project Objective:
-The objective of this project is to utilize **MediaPipe** to detect player controls, transmit the MediaPipe data to a server, update the game logic on the server, and return the game visuals to the user in real-time.
+The objective of this project is to transform a single-player runner game into a **true multiplayer experience** with a client-server architecture, robust error handling, thorough testing, and improved UI elements. Players connect to a central server that handles the game logic and streaming visuals, allowing multiple players to play simultaneously rather than taking turns.
 
 ---
 
 ## Scope:
 
 ### Inclusions:
-- Implement an open-source runner game on a local machine for single-player use.
-- Update the game controls to work with **MediaPipe** for hand or body gesture input.
-- Refactor the local game code into distinct **client** and **server** components:
-  - The client will handle capturing MediaPipe data and sending it to the server.
-  - The server will process player inputs, update the game loop, and send the updated visuals back to the client.
-- Implement multiplayer functionality:
-  - Allow a second player to take turns with the active player.
-  - Both players will receive the same game stream from the server. The non-active player will see the same visuals, with text overlay indicating their turn.
+- Refactor a local runner game into separate **client** and **server** components.
+- Implement **true multiplayer** gameplay, where multiple players can connect at once, move simultaneously, and compete.
+- Update the UI to provide a cleaner, more intuitive user experience.
+- Emphasize **testing and error handling** to ensure a stable and reliable gaming environment.
 
 ### Exclusions:
-- Real-time player-vs-player gameplay will not be included.
-- Complex AI for non-player characters or opponents is out of scope.
-- Cross-platform deployment beyond local machines is not required.
+- MediaPipe gesture controls have been removed; input now relies on more conventional controls.
+- Complex AI or non-player enemies beyond basic obstacles remain out of scope.
+- Cross-platform deployment beyond local or LAN play is not guaranteed.
 
 ---
 
 ## Deliverables:
-- A fully functioning open-source runner game adapted with **MediaPipe** gesture controls.
-- A **client-server architecture** that supports multiplayer turn-based gameplay.
-- **Documentation** detailing the installation, setup, and usage of the game.
-- A final presentation or demo showcasing the implemented features.
+- A functional multiplayer runner game that runs on a client-server model.
+- Clients send player input (e.g., movement keys) to the server; the server updates the game state and sends updated visuals back.
+- Improved UI and on-screen feedback (e.g., player IDs displayed above their characters).
+- Thorough documentation and emphasis on testing and robust error handling.
 
 ---
 
@@ -44,21 +40,20 @@ The objective of this project is to utilize **MediaPipe** to detect player contr
    ```bash
    cd /path/to/your/project
    ```
-2. Start the server using the following command:
+2. Start the server using `argparse` for the port:
    ```bash
-   python game_server.py --host <SERVER_HOST> --port <SERVER_PORT>
+   python game_server.py --port <SERVER_PORT>
    ```
-   - Replace `<SERVER_HOST>` with the desired host (e.g., `0.0.0.0` to listen on all interfaces).
-   - Replace `<SERVER_PORT>` with the desired port (e.g., `38901`).
+   Replace `<SERVER_PORT>` with the desired port (e.g., `38902`).
 
    Example:
    ```bash
-   python game_server.py --host 0.0.0.0 --port 38901
+   python game_server.py --port 38902
    ```
 
-3. The server will log messages indicating its status, such as:
+3. The server will log messages like:
    ```
-   [INFO] Server listening on 0.0.0.0:38901
+   [INFO] Server listening on 0.0.0.0:38902
    ```
 
 ### Running the Client:
@@ -66,102 +61,76 @@ The objective of this project is to utilize **MediaPipe** to detect player contr
    ```bash
    cd /path/to/your/project
    ```
-2. Start the client using the following command:
+2. Start the client:
    ```bash
    python game_client.py --host <SERVER_HOST> --port <SERVER_PORT>
    ```
-   - Replace `<SERVER_HOST>` with the server's IP address.
-   - Replace `<SERVER_PORT>` with the server's port.
+   Replace `<SERVER_HOST>` and `<SERVER_PORT>` as needed.
 
    Example:
    ```bash
-   python game_client.py --host 127.0.0.1 --port 38901
+   python game_client.py --host 127.0.0.1 --port 38902
    ```
 
-3. The client will connect to the server and begin processing game visuals and controls.
+3. The client will connect, display the updated UI, and participate in the multiplayer runner.
 
 ---
 
 ## Timeline:
 
 ### Key Milestones:
-1. **Game Setup & Single-Player Implementation**: Week 1
-   - Get the open-source runner game running locally with keyboard controls.
-   
-2. **MediaPipe Integration for Controls**: Week 2-3
-   - Replace keyboard controls with MediaPipe-based gesture controls.
-   
-3. **Client-Server Architecture**: Week 4-5
-   - Split the game into client-server architecture and ensure smooth data transmission.
-   
-4. **Multiplayer Turn-based Functionality**: Week 6-7
-   - Add second player functionality, allowing for turn-based gameplay.
-   
-5. **Testing & Optimization**: Week 8
-   - Test the game for performance and latency, especially around MediaPipe data transmission.
+1. **Initial Game Setup**: Confirm local runner game runs with keyboard controls.
+2. **Refactor to Client-Server**: Split game logic into client and server.
+3. **Multiplayer Integration**: Allow multiple clients to connect and play simultaneously.
+4. **UI/UX Improvements**: Display player IDs, game states, and scores clearly on-screen.
+5. **Testing and Error Handling**: Rigorously test the client and server for latency, disconnects, and edge cases.
 
 ---
 
-## Task Breakdown:
+## Testing and Error Handling:
 
-1. **Game Setup (5 hours)**:
-   - Download and configure the open-source runner game.
-
-2. **MediaPipe Control Integration (15 hours)**:
-   - Set up MediaPipe for hand/pose detection and map it to game actions.
-
-3. **Client-Server Refactor (20 hours)**:
-   - Refactor the game code to separate client and server responsibilities.
-
-4. **Multiplayer Logic (15 hours)**:
-   - Add functionality for the second player and handle turn-taking.
-
-5. **Testing and Debugging (10 hours)**:
-   - Thoroughly test for bugs, synchronization issues, and latency.
+- Implement comprehensive error checks when clients disconnect unexpectedly or send malformed data.
+- Test with multiple simultaneous clients to ensure stable performance.
+- Add logging and debug messages on both client and server to trace issues.
+- Run stress tests to ensure the server handles multiple players joining, leaving, and running the game for extended periods.
 
 ---
 
 ## Technical Requirements:
 
 ### Hardware:
-- Local machines for development (clients).
-- A server to handle game logic and data processing (can be a local machine).
-
+- Local machines (clients) and a server machine (can be local or remote).
+  
 ### Software:
-- Programming languages: **Python**.
-- Libraries: **MediaPipe**, **Socket** for networking, **Threading** for concurrency.
-- Game engine: Depends on the chosen open-source runner game (e.g., **Pygame**).
-- Operating System: **Linux** or **Windows** (cross-platform support ideal but not required).
+- **Python** and **Pygame** for rendering and logic.
+- **Asyncio** and **Sockets** for networking.
+- **argparse** for flexible command-line parameter handling.
+- The server and client are tested on Linux or Windows environments.
 
 ---
 
-## Server and Client Implementation:
+## Server and Client Details:
 
 ### Server:
-1. **Socket Creation**:
-   - The server uses a TCP socket to listen for incoming client connections.
-2. **Handling Client Connections**:
-   - A new thread is spawned for each client, using the `handle_client` method.
-3. **Game State Communication**:
-   - The server prepares the game state as a JSON object and sends it to the client.
+- Listens for incoming TCP connections.
+- Manages all player states, obstacle positions, and scoring.
+- Regularly broadcasts the updated game state to all connected clients.
 
 ### Client:
-1. **Socket Creation**:
-   - The client connects to the server using the specified host and port.
-2. **User Interaction**:
-   - The client processes MediaPipe input for player controls.
-   - The user interacts with the game via gesture controls, which are transmitted to the server.
+- Connects to the server using host and port arguments.
+- Sends user input (e.g., keyboard movement) to the server.
+- Receives updated game state (positions, scores, winner announcements) to display in real-time.
 
 ---
 
 ## Roles and Responsibilities:
 
 ### Jake Liesendahl:
-- Primary developer for client-server integration and game loop optimization.
-- Responsible for setting up the server and managing the game logic on the server side.
+- Lead on the server architecture, error handling, and testing strategies.
+- Ensures the server gracefully handles disconnects and malformed data.
 
 ### Calvin Mickelson:
-- Lead on **MediaPipe** integration for gesture controls.
-- Responsible for implementing player control mechanisms and testing the multiplayer component.
+- Focus on client input handling, UI improvements, and stable communication logic.
+- Responsible for implementing the multiplayer visuals and verifying UI responsiveness under stress conditions.
 
 ---
