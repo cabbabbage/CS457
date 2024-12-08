@@ -3,68 +3,49 @@ import pygame
 import json
 import asyncio
 import argparse
-from control import Controller
-import images
 import ssl
 import hmac
 import hashlib
+from control import Controller
+import images
 
 # Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
-
-pygame.init()
-
-SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
 SECRET_KEY = b'supersecretkey'
 
+pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 client_width, client_height = screen.get_size()
 pygame.display.set_caption("Client Game Visuals")
 font = pygame.font.SysFont(None, 40)
 clock = pygame.time.Clock()
 
-# Input box dimensions and variables
 input_boxes = {
     "host": {"rect": pygame.Rect(client_width // 2 - 150, client_height // 2 - 100, 300, 50), "text": ""},
     "port": {"rect": pygame.Rect(client_width // 2 - 150, client_height // 2, 300, 50), "text": ""},
     "name": {"rect": pygame.Rect(client_width // 2 - 150, client_height // 2 + 100, 300, 50), "text": ""},
 }
-current_focus = "host"  # Current focused input box
-close_button = pygame.Rect(client_width - 50, 10, 40, 40)  # "X" button dimensions
-
+current_focus = "host"
+close_button = pygame.Rect(client_width - 50, 10, 40, 40)
 
 def draw_close_button():
-    """Draw the close button on the screen."""
     pygame.draw.rect(screen, (255, 0, 0), close_button)
     label = font.render("X", True, (255, 255, 255))
     screen.blit(label, (close_button.x + 10, close_button.y + 5))
-
 
 def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
 
 def sign_message(message):
-    """Sign a message using HMAC."""
     return hmac.new(SECRET_KEY, message.encode(), hashlib.sha256).hexdigest()
 
-
-def verify_message_signature(message, signature):
-    """Verify the integrity of a received message."""
-    return hmac.compare_digest(sign_message(message), signature)
-
-
 async def join_game(pre_host=None, pre_port=None):
-    """UI to get IP address and port number."""
     global input_boxes, current_focus
     submit = False
-
-    # Remove the name box from input_boxes
     input_boxes_no_name = {
         "host": input_boxes["host"],
         "port": input_boxes["port"]
     }
-
-    # Pre-fill inputs if provided
     if pre_host:
         input_boxes_no_name["host"]["text"] = pre_host
     if pre_port:
@@ -90,55 +71,20 @@ async def join_game(pre_host=None, pre_port=None):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if close_button.collidepoint(event.pos):
                     pygame.quit()
-                    exit()  # Exit the game entirely
+                    exit()
                 for k, b in input_boxes_no_name.items():
                     if b["rect"].collidepoint(event.pos):
                         current_focus = k
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:  # Submit all input
+                if event.key == pygame.K_RETURN:
                     if all(b["text"].strip() for b in input_boxes_no_name.values()):
                         submit = True
-                elif event.key == pygame.K_BACKSPACE:  # Remove last character
+                elif event.key == pygame.K_BACKSPACE:
                     input_boxes_no_name[current_focus]["text"] = input_boxes_no_name[current_focus]["text"][:-1]
-                elif len(input_boxes_no_name[current_focus]["text"]) < 20:  # Max length
+                elif len(input_boxes_no_name[current_focus]["text"]) < 20:
                     input_boxes_no_name[current_focus]["text"] += event.unicode
 
     return input_boxes_no_name["host"]["text"], int(input_boxes_no_name["port"]["text"])
-
-
-
-
-async def connect_to_server(host, port):
-    """Connect to the server using SSL and return a connected socket."""
-    print(f"[DEBUG] Connecting to {host}:{port} with SSL...")
-    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    ssl_context.load_verify_locations("server.crt")  # Path to the server's public certificate
-
-    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
-    print("[DEBUG] Secure connection established with server.")
-    return reader, writer
-
-
-async def authenticate_with_server(writer, token):
-    """Authenticate the client with the server using a token."""
-    auth_message = json.dumps({"token": token})
-    signature = sign_message(auth_message)
-    writer.write((auth_message + "|" + signature + "\n").encode("utf-8"))
-    await writer.drain()
-    print("[DEBUG] Authentication token sent to the server.")
-
-
-async def send_controller_input(writer, id, controller):
-    """Send signed controller input to the server asynchronously."""
-    while True:
-        x, y = controller.get_keys()
-        message = json.dumps({"id": id, "x": x, "y": y})
-        signature = sign_message(message)
-        writer.write((message + "|" + signature + "\n").encode("utf-8"))
-        await writer.drain()
-        await asyncio.sleep(0.05)
-
-
 async def submit_num_players(writer):
     """Display a UI for the first player to enter the number of players."""
     input_box = pygame.Rect(client_width // 2 - 150, client_height // 2, 300, 50)
@@ -172,27 +118,59 @@ async def submit_num_players(writer):
                     input_text = input_text[:-1]
                 elif len(input_text) < 3:
                     input_text += event.unicode
+                    
+async def connect_to_server(host, port):
+    print(f"[DEBUG] Connecting to {host}:{port} with SSL...")
+    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    # Make sure 'server.crt' (from the server) is copied to the client's directory
+    ssl_context.load_verify_locations("server.crt")
+    ssl_context.check_hostname = False
 
+    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+    print("[DEBUG] Secure connection established with server.")
+    return reader, writer
+
+async def submit_num_players(writer):
+    input_box = pygame.Rect(client_width // 2 - 150, client_height // 2, 300, 50)
+    input_text = ""
+
+    while True:
+        screen.fill((160, 130, 110))
+        prompt = font.render("Enter number of players:", True, (255, 255, 255))
+        screen.blit(prompt, (client_width // 2 - 300, client_height // 2 - 50))
+        pygame.draw.rect(screen, (255, 255, 255), input_box, 2)
+        input_text_render = font.render(input_text, True, (255, 255, 255))
+        screen.blit(input_text_render, (input_box.x + 10, input_box.y + 10))
+        draw_close_button()
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.MOUSEBUTTONDOWN and close_button.collidepoint(event.pos)):
+                pygame.quit()
+                exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    try:
+                        num_players = int(input_text.strip())
+                        writer.write(json.dumps({"num_players": num_players}).encode("utf-8") + b"\n")
+                        await writer.drain()
+                        print(f"[DEBUG] Number of players submitted: {num_players}")
+                        return
+                    except ValueError:
+                        print("[ERROR] Invalid number entered.")
+                elif event.key == pygame.K_BACKSPACE:
+                    input_text = input_text[:-1]
+                elif len(input_text) < 3:
+                    input_text += event.unicode
 
 async def listen_and_render(reader, writer, id, controller):
-    """Listen to the server for game state updates and render visuals."""
     game_over = False
 
-    def sign_message(message):
-        """Sign a message using HMAC."""
-        return hmac.new(SECRET_KEY, message.encode(), hashlib.sha256).hexdigest()
-
-    def verify_message_signature(message, signature):
-        """Verify the integrity of a received message."""
-        return hmac.compare_digest(sign_message(message), signature)
-
     async def send_controller_input():
-        """Send signed controller input to the server asynchronously."""
         while not game_over:
             x, y = controller.get_keys()
             data = json.dumps({"id": id, "x": x, "y": y})
-            signature = sign_message(data)
-            writer.write((data + "|" + signature + "\n").encode("utf-8"))
+            writer.write((data + "\n").encode("utf-8"))
             await writer.drain()
             await asyncio.sleep(0.05)
 
@@ -200,14 +178,8 @@ async def listen_and_render(reader, writer, id, controller):
 
     while not game_over:
         try:
-            raw_data = await reader.readuntil(b'\n')
-            message, signature = raw_data.decode("utf-8").rsplit("|", 1)
-
-            if not verify_message_signature(message, signature):
-                print("[ERROR] Message integrity verification failed!")
-                continue  # Ignore tampered messages
-
-            game_state = json.loads(message)
+            data = await reader.readuntil(b'\n')
+            game_state = json.loads(data.decode("utf-8"))
             run_state = game_state.get("run_state", 0)
             players = game_state.get("players", [])
             obstacles = game_state.get("obstacles", [])
@@ -215,7 +187,6 @@ async def listen_and_render(reader, writer, id, controller):
             screen.fill((160, 130, 110))
             draw_close_button()
 
-            # Render the game state based on run_state
             if run_state == 0:
                 label = font.render("Waiting for players...", True, (255, 255, 255))
                 screen.blit(label, (client_width // 2 - 150, client_height // 2))
@@ -295,32 +266,32 @@ async def main():
     args = parser.parse_args()
 
     while True:
-        # Attempt to join game with provided args or prompt user
         host, port = await join_game(pre_host=args.host, pre_port=args.port) if args.host and args.port else await join_game()
-
         if not host or not port:
-            continue  # Restart if user exits via the "X" button or doesn't fill fields
+            continue
 
-        reader, writer = await connect_to_server(host, port)
+        try:
+            reader, writer = await connect_to_server(host, port)
+            initial_data_raw = await reader.readuntil(b'\n')
+            initial_state = json.loads(initial_data_raw.decode("utf-8"))
+            id = initial_state.get("your_id")
 
-        initial_data_raw = await reader.readuntil(b'\n')
-        initial_state = json.loads(initial_data_raw.decode("utf-8"))
-        id = initial_state.get("your_id")
+            if initial_state.get("run_state") == 3:
+                if await submit_num_players(writer) is False:
+                    writer.close()
+                    await writer.wait_closed()
+                    continue
 
-        if initial_state.get("run_state") == 3:
-            if await submit_num_players(writer) is False:
-                # If user pressed X or quit at the num players screen
-                writer.close()
-                await writer.wait_closed()
-                continue  # Return to join_game
+            controller = Controller()
+            asyncio.create_task(controller.listen_for_keys())
+            await listen_and_render(reader, writer, id, controller)
 
-        controller = Controller()
-        asyncio.create_task(controller.listen_for_keys())
-        await listen_and_render(reader, writer, id, controller)
-
-        writer.close()
-        await writer.wait_closed()
-
+            writer.close()
+            await writer.wait_closed()
+        except ssl.SSLError as e:
+            print(f"[ERROR] SSL error: {e}")
+        except Exception as e:
+            print(f"[ERROR] Connection error: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
