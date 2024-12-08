@@ -5,11 +5,17 @@ import asyncio
 import argparse
 from control import Controller
 import images
+import ssl
+import hmac
+import hashlib
 
 # Constants for server dimensions
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
 
 pygame.init()
+
+SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
+SECRET_KEY = b'supersecretkey'
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 client_width, client_height = screen.get_size()
@@ -36,6 +42,15 @@ def draw_close_button():
 
 def scale_position(x, y):
     return int(x * client_width / SERVER_WIDTH), int(y * client_height / SERVER_HEIGHT)
+
+def sign_message(message):
+    """Sign a message using HMAC."""
+    return hmac.new(SECRET_KEY, message.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_message_signature(message, signature):
+    """Verify the integrity of a received message."""
+    return hmac.compare_digest(sign_message(message), signature)
 
 
 async def join_game(pre_host=None, pre_port=None):
@@ -92,12 +107,36 @@ async def join_game(pre_host=None, pre_port=None):
 
 
 
+
 async def connect_to_server(host, port):
-    """Connect to the server and return a connected socket."""
-    print(f"[DEBUG] Connecting to {host}:{port}...")
-    reader, writer = await asyncio.open_connection(host, port)
-    print("[DEBUG] Connected to server.")
+    """Connect to the server using SSL and return a connected socket."""
+    print(f"[DEBUG] Connecting to {host}:{port} with SSL...")
+    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ssl_context.load_verify_locations("server.crt")  # Path to the server's public certificate
+
+    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+    print("[DEBUG] Secure connection established with server.")
     return reader, writer
+
+
+async def authenticate_with_server(writer, token):
+    """Authenticate the client with the server using a token."""
+    auth_message = json.dumps({"token": token})
+    signature = sign_message(auth_message)
+    writer.write((auth_message + "|" + signature + "\n").encode("utf-8"))
+    await writer.drain()
+    print("[DEBUG] Authentication token sent to the server.")
+
+
+async def send_controller_input(writer, id, controller):
+    """Send signed controller input to the server asynchronously."""
+    while True:
+        x, y = controller.get_keys()
+        message = json.dumps({"id": id, "x": x, "y": y})
+        signature = sign_message(message)
+        writer.write((message + "|" + signature + "\n").encode("utf-8"))
+        await writer.drain()
+        await asyncio.sleep(0.05)
 
 
 async def submit_num_players(writer):
@@ -139,12 +178,21 @@ async def listen_and_render(reader, writer, id, controller):
     """Listen to the server for game state updates and render visuals."""
     game_over = False
 
+    def sign_message(message):
+        """Sign a message using HMAC."""
+        return hmac.new(SECRET_KEY, message.encode(), hashlib.sha256).hexdigest()
+
+    def verify_message_signature(message, signature):
+        """Verify the integrity of a received message."""
+        return hmac.compare_digest(sign_message(message), signature)
+
     async def send_controller_input():
-        """Send controller input to the server asynchronously."""
+        """Send signed controller input to the server asynchronously."""
         while not game_over:
             x, y = controller.get_keys()
             data = json.dumps({"id": id, "x": x, "y": y})
-            writer.write((data + "\n").encode("utf-8"))
+            signature = sign_message(data)
+            writer.write((data + "|" + signature + "\n").encode("utf-8"))
             await writer.drain()
             await asyncio.sleep(0.05)
 
@@ -152,14 +200,19 @@ async def listen_and_render(reader, writer, id, controller):
 
     while not game_over:
         try:
-            data = await reader.readuntil(b'\n')
-            game_state = json.loads(data.decode("utf-8"))
+            raw_data = await reader.readuntil(b'\n')
+            message, signature = raw_data.decode("utf-8").rsplit("|", 1)
+
+            if not verify_message_signature(message, signature):
+                print("[ERROR] Message integrity verification failed!")
+                continue  # Ignore tampered messages
+
+            game_state = json.loads(message)
             run_state = game_state.get("run_state", 0)
             players = game_state.get("players", [])
             obstacles = game_state.get("obstacles", [])
 
             screen.fill((160, 130, 110))
-            # Draw the X button here as well
             draw_close_button()
 
             # Render the game state based on run_state
@@ -172,23 +225,16 @@ async def listen_and_render(reader, writer, id, controller):
                         pos_x, pos_y = scale_position(player["position"]["x"], player["position"]["y"])
                         screen.blit(images.bike, (pos_x, pos_y))
                         if player["id"] == id:
-                        # Draw the bike image at the scaled coordinates
-
-
-                            # Render the player's name
                             name_label = font.render("YOU", True, (255, 0, 0))
-
-                        # Draw the name label just above the bike image
                             screen.blit(name_label, (pos_x, pos_y - name_label.get_height()))
                             score_str = f"Score: {int(player['score'])}"
                             score_label = font.render(score_str, True, (255, 255, 255))
                             screen.blit(score_label, (10, 10))
-                    if  player["id"]==id and not (player["active"]):
-                            score_str = "YOU ARE DEAD"
-                            score_label = font.render(score_str, True, (255, 0, 0))
-                            label_rect = score_label.get_rect(center=(client_width // 2, client_height // 2))
-                            screen.blit(score_label, label_rect)
-
+                    if player["id"] == id and not player["active"]:
+                        score_str = "YOU ARE DEAD"
+                        score_label = font.render(score_str, True, (255, 0, 0))
+                        label_rect = score_label.get_rect(center=(client_width // 2, client_height // 2))
+                        screen.blit(score_label, label_rect)
 
                 for obstacle in obstacles:
                     pos = scale_position(obstacle["position"]["x"], obstacle["position"]["y"])
@@ -197,51 +243,39 @@ async def listen_and_render(reader, writer, id, controller):
                     elif obstacle["type"] == "tree":
                         screen.blit(images.tree, pos)
             elif run_state == 2:
-                # Display "Game Over"
                 label = font.render("Game Over", True, (255, 0, 0))
                 screen.blit(label, (client_width // 2 - 100, client_height // 2 - 100))
 
-                # Sort players by score descending
                 scored_players = [(p["id"], p["score"]) for p in players]
                 scored_players.sort(key=lambda x: x[1], reverse=True)
 
-                # Determine the winner(s)
                 top_score = scored_players[0][1]
                 winners = [p for p in scored_players if p[1] == top_score]
 
                 if len(winners) == 1:
-                    # A single winner
                     winner_id = winners[0][0]
                     if winner_id == id:
-                        # User is the winner
                         winner_label = font.render("You Won", True, (255, 255, 0))
                     else:
-                        # Another player won
                         winner_label = font.render("You Lost!", True, (255, 255, 0))
                 else:
-                    # It's a tie
                     winner_label = font.render("It's a tie!", True, (255, 255, 0))
 
                 screen.blit(winner_label, (client_width // 2 - 50, client_height // 2))
 
-                # Display all player scores under "Game Over"
                 start_y = client_height // 2 + 50
                 for i, (pid, pscore) in enumerate(scored_players):
                     if pid == id:
-                        # Current user's score, show "YOU" in red
                         score_str = f"YOU: {int(pscore)}"
                         score_label = font.render(score_str, True, (255, 0, 0))
                     else:
-                        # Other players' scores
                         score_str = f"Player {pid}: {int(pscore)}"
                         score_label = font.render(score_str, True, (255, 255, 255))
                     screen.blit(score_label, (client_width // 2 - 50, start_y + i * 30))
 
-                # Countdown from game_state indicating new game
-                countdown_timer = game_state.get("countdown_timer", 10)  # fallback to 10 if not provided
+                countdown_timer = game_state.get("countdown_timer", 10)
                 countdown_label = font.render(f"New game starting in {countdown_timer}...", True, (255, 255, 255))
                 screen.blit(countdown_label, (client_width // 2 - 150, client_height // 2 + 200))
-
 
             pygame.display.flip()
             clock.tick(60)
@@ -249,11 +283,10 @@ async def listen_and_render(reader, writer, id, controller):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or (event.type == pygame.MOUSEBUTTONDOWN and close_button.collidepoint(event.pos)):
                     pygame.quit()
-                    exit()  # Exit the game entirely
+                    exit()
 
         except (asyncio.IncompleteReadError, json.JSONDecodeError):
             break
-
 
 async def main():
     parser = argparse.ArgumentParser(description="Game Client")
