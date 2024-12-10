@@ -23,12 +23,14 @@ class Bike:
         self.buffer = ""  # Buffer for partial JSON data
         self.status = False
 
+
         # Initialize hitbox
         self.hitbox_top = 0
         self.hitbox_bottom = 0
         self.hitbox_left = 0
         self.hitbox_right = 0
         self.get_hitbox()
+
 
     async def read_from_client(self):
         """
@@ -60,7 +62,7 @@ class Bike:
                         self.buffer = self.buffer[index:].lstrip()
 
                         # Extract movement data
-                        self.id, x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
+                        self.id,  x, y = parsed_data.get("id"), parsed_data.get("x"), parsed_data.get("y")
 
                         # Only print the parsed data if either x or y is not exactly "0"
                         if not(x == 0 and y == 0):

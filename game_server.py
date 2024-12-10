@@ -3,18 +3,17 @@ import asyncio
 from Tree import Tree
 from Rabbit import Rabbit
 from Bike import Bike
-
-players = []
-obstacles = []
+import argparse
+# Global game variables
+num_players = None  # Number of players needed to start the game
+players = []  # List of connected players
+obstacles = []  # List of obstacles
 game_started = False
-lock = asyncio.Lock()
-run_state = 3  # Default to waiting for players
-active_player_index = 0  # Tracks the current active player
-turn_count = 0  # Counts the number of turns completed
+run_state = 0  # 0: Waiting for players, 1: Game running, 2: Game over, 3: First player sets num_players
 
 
 def obstacle_reset():
-    """Reset all obstacles."""
+    
     for obstacle in obstacles:
         obstacle.active = False
         obstacle.rnd_start()
@@ -29,8 +28,8 @@ def game_setup():
     return obs
 
 
-async def handle_client(reader, writer):
-    global players
+async def handle_client(reader, writer, lock):
+    global players, num_players, run_state, obstacles
 
     width, height = 1920, 1080
     addr = writer.get_extra_info('peername')  # Get client address
@@ -38,24 +37,45 @@ async def handle_client(reader, writer):
     # Create a new bike for the player
     player_bike = Bike(width, height, reader, addr)
 
-    # Start reading input from client asynchronously
-    asyncio.create_task(player_bike.read_from_client())
-
     async with lock:
         players.append((player_bike, writer))  # Store player and writer as a tuple
         player_bike.id = len(players)
         print(f"[DEBUG] New player connected. Total players: {len(players)}")
 
-        # Send assigned ID to client
-        initial_data = {
-            "your_id": player_bike.id,
-        }
-        serialized_initial_data = json.dumps(initial_data) + "\n"
-        try:
-            writer.write(serialized_initial_data.encode("utf-8"))
+        # If this is the first player, set run_state = 3 and request num_players
+        if len(players) == 1:
+            run_state = 3
+            try:
+                # Send run_state = 3 to the first player
+                msg = {"run_state": 3, "your_id": player_bike.id}
+                print(f"[DEBUG] Sending to first client: {msg}")
+                writer.write(json.dumps(msg).encode("utf-8") + b"\n")
+                await writer.drain()
+
+                # Wait for the first client to provide the number of players
+                raw_data = await reader.readuntil(b'\n')
+                data = json.loads(raw_data.decode("utf-8"))
+                num_players = data.get("num_players", 2)  # Default to 2 if not specified
+                print(f"[DEBUG] Number of players set to: {num_players}")
+
+                # Initialize obstacles after receiving num_players
+                obstacles = game_setup()
+                run_state = 0  # Transition to waiting for more players
+            except (ConnectionResetError, json.JSONDecodeError):
+                print(f"[DEBUG] Player {player_bike.id} disconnected during initial setup.")
+                players.remove((player_bike, writer))
+                writer.close()
+                await writer.wait_closed()
+                return
+
+        # If not the first player, send current run_state (likely 0: Waiting for players)
+        else:
+            msg = {"run_state": run_state, "your_id": player_bike.id}
+            print(f"[DEBUG] Sending to new client: {msg}")
+            writer.write(json.dumps(msg).encode("utf-8") + b"\n")
             await writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
-            pass
+
+    asyncio.create_task(player_bike.read_from_client())  # Read input asynchronously
 
     try:
         # Keep the connection open
@@ -66,229 +86,121 @@ async def handle_client(reader, writer):
     finally:
         # Clean up when client disconnects
         async with lock:
-            players = [p for p in players if p[0] != player_bike]
-            print(f"[DEBUG] Player disconnected. Total players: {len(players)}")
+            if (player_bike, writer) in players:
+                players.remove((player_bike, writer))
+                print(f"[DEBUG] Player {player_bike.id} disconnected. Total players: {len(players)}")
         writer.close()
         await writer.wait_closed()
 
 
-async def game_loop():
-    global game_started, run_state, players, active_player_index, obstacles, turn_count
+async def game_loop(lock):
+    global players, obstacles, run_state, game_started
 
     while True:
         await asyncio.sleep(0.05)  # Game loop frequency
 
         async with lock:
-            if len(players) >= 2 and not game_started:
+            # Wait for num_players to be set by the first client
+            if num_players is None or len(players) < num_players:
+                run_state = 0  # Waiting for players
+            elif not game_started:
+                run_state = 1  # Game running
                 game_started = True
-                run_state = 0
-                active_player_index = 0
-                turn_count = 0  # Reset turn count
-                for player in players:
-                    player[0].score = 0  # Reset scores
-                players[active_player_index][0].active = True  # Activate the first player
                 print("[DEBUG] Game started.")
 
-            current_run_state = run_state
+            # Broadcast game state (including run_state) to all clients
+            game_state = {
+                "run_state": run_state,
+                "players": [
+                    {
+                        "id": player_bike.id,
+                        "position": {"x": player_bike.x, "y": player_bike.y},
+                        "score": player_bike.score,
+                        "active": player_bike.active,
+                    }
+                    for player_bike, _ in players
+                ],
+                "obstacles": [
+                    {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
+                    for obstacle in obstacles if obstacle.active
+                ] if game_started else [],  # Only include obstacles during the game
+            }
+            serialized_game_state = json.dumps(game_state) + "\n"
 
-        if current_run_state == 0 and game_started:  # Normal gameplay
+            # Create a list of players to remove in case of exceptions
+            disconnected_players = []
+
+            for player_bike, writer in players:
+                try:
+                    writer.write(serialized_game_state.encode("utf-8"))
+                    await writer.drain()
+                except (ConnectionResetError, BrokenPipeError):
+                    print(f"[DEBUG] Player {player_bike.id} disconnected during game state update.")
+                    disconnected_players.append((player_bike, writer))
+
+            # Remove disconnected players
+            for player in disconnected_players:
+                players.remove(player)
+                print(f"[DEBUG] Removed player {player[0].id}. Total players: {len(players)}")
+
+        if run_state == 1:  # Game running
             # Update obstacles
             for obstacle in obstacles:
                 if not obstacle.active:
                     obstacle.activate()
                     break
-            for obstacle in obstacles:
-                if obstacle.active:
-                    obstacle.update()
+                obstacle.update()
 
-            # Update active player's score
-            async with lock:
-                active_player = players[active_player_index][0]
-                if active_player.active:
-                    active_player.score += 0.1
+            for player_bike, _ in players:
+                if player_bike.active:
+                    player_bike.score += 0.1  # Increment score per frame or tick
 
-            # Check for collision between the active player's bike and obstacles
-            collision_detected = False
-            for obstacle in obstacles:
-                if obstacle.active and (
-                    active_player.hitbox_right > obstacle.hitbox_left
-                    and active_player.hitbox_left < obstacle.hitbox_right
-                    and active_player.hitbox_bottom > obstacle.hitbox_top
-                    and active_player.hitbox_top < obstacle.hitbox_bottom
-                ):
-                    async with lock:
-                        run_state = 1  # Collision detected, switching state
-                    print(f"[DEBUG] Collision detected between player {active_player.id} and obstacle.")
-                    collision_detected = True
-                    break
+                for obstacle in obstacles:
+                    if obstacle.active and (
+                        player_bike.hitbox_right > obstacle.hitbox_left
+                        and player_bike.hitbox_left < obstacle.hitbox_right
+                        and player_bike.hitbox_bottom > obstacle.hitbox_top
+                        and player_bike.hitbox_top < obstacle.hitbox_bottom
+                    ):
+                        print(f"[DEBUG] Collision detected for player {player_bike.id}.")
+                        player_bike.active = False  # Handle collision
+                        # Check if all players are inactive
+                        if all(not p[0].active for p in players):
+                            run_state = 2  # Game Over
+                        break  # Exit obstacle loop
 
-            if collision_detected:
-                continue  # Skip sending game state to clients in this iteration
+        elif run_state == 2:  # Game over
+            print("[DEBUG] Game over. Displaying results.")
+            await asyncio.sleep(10)  # Allow clients to display game over screen
+            run_state = 0
+            game_started = False
+            obstacle_reset()
 
-        elif current_run_state == 1:  # Switching players or ending game
-            countdown_timer = 5  # Starting countdown time
-            while countdown_timer > 0:
-                await asyncio.sleep(1)  # Wait for 1 second
-                countdown_timer -= 1
+            # Reset player states
+            for player_bike, _ in players:
+                player_bike.active = True
+                player_bike.score = 0
 
-                # Send game state to clients with countdown_timer
-                async with lock:
-                    game_state = {
-                        "active_player_id": None,  # No active player during switching
-                        "bike": {},
-                        "obstacles": [],
-                        "scores": [
-                            {"id": player[0].id, "score": player[0].score}
-                            for player in players
-                        ],
-                        "run_state": run_state,
-                        "countdown_timer": countdown_timer
-                    }
-                    serialized_game_state = json.dumps(game_state) + "\n"
-
-                # Broadcast to all clients
-                async with lock:
-                    for _, player_writer in players:
-                        try:
-                            player_writer.write(serialized_game_state.encode("utf-8"))
-                            await player_writer.drain()
-                        except (ConnectionResetError, BrokenPipeError):
-                            continue
-
-            async with lock:
-                # Deactivate current player
-                players[active_player_index][0].active = False
-
-                # Reset the obstacles
-                obstacle_reset()
-
-                turn_count += 1  # Increment turn count
-                if turn_count >= len(players):  # All players have had their turn
-                    run_state = 2  # Move to final state
-                    print("[DEBUG] All players have completed their turns. Moving to final state.")
-                else:
-                    # Rotate to the next player
-                    active_player_index = (active_player_index + 1) % len(players)
-                    # Activate next player
-                    players[active_player_index][0].active = True
-                    run_state = 0  # Back to normal gameplay
-                    print(f"[DEBUG] Switched to player {players[active_player_index][0].id}")
-
-        elif current_run_state == 2:  # Final state - Display winner
-            countdown_timer = 10  # Display winner for 10 seconds
-            while countdown_timer > 0:
-                await asyncio.sleep(1)
-                countdown_timer -= 1
-
-                # Prepare final game state with winner announcement
-                async with lock:
-                    # Determine the winner
-                    scores = {player[0].id: player[0].score for player in players}
-                    max_score = max(scores.values())
-                    winners = [player_id for player_id, score in scores.items() if score == max_score]
-                    if len(winners) == 1:
-                        winner_id = winners[0]
-                    else:
-                        winner_id = None  # It's a tie
-
-                    game_state = {
-                        "active_player_id": None,
-                        "bike": {},
-                        "obstacles": [],
-                        "scores": [
-                            {"id": player[0].id, "score": player[0].score}
-                            for player in players
-                        ],
-                        "run_state": run_state,
-                        "winner_id": winner_id,
-                        "countdown_timer": countdown_timer
-                    }
-                    serialized_game_state = json.dumps(game_state) + "\n"
-
-                # Broadcast to all clients
-                async with lock:
-                    for _, player_writer in players:
-                        try:
-                            player_writer.write(serialized_game_state.encode("utf-8"))
-                            await player_writer.drain()
-                        except (ConnectionResetError, BrokenPipeError):
-                            continue
-
-            # Reset the game after displaying the winner
-            async with lock:
-                game_started = True  # Set to True to restart the game
-                run_state = 0
-                active_player_index = 0
-                turn_count = 0  # Reset turn count
-                for player in players:
-                    player[0].score = 0  # Reset scores
-                obstacle_reset()
-                players[active_player_index][0].active = True  # Activate the first player
-                print("[DEBUG] Game restarting.")
-
-        # Prepare the game state
-        async with lock:
-            if game_started and run_state == 0:
-                active_player = players[active_player_index][0]
-                game_state = {
-                    "active_player_id": active_player.id,
-                    "bike": {
-                        "type": active_player.type,
-                        "position": {"x": active_player.x, "y": active_player.y},
-                        "score": active_player.score,
-                        "active": active_player.active,
-                        "id": active_player.id,
-                    },
-                    "obstacles": [
-                        {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
-                        for obstacle in obstacles if obstacle.active
-                    ],
-                    "scores": [
-                        {"id": player[0].id, "score": player[0].score}
-                        for player in players
-                    ],
-                    "run_state": run_state,
-                }
-            elif run_state == 2:
-                # Final state already handled in the previous block
-                continue
-            else:
-                game_state = {
-                    "active_player_id": None,
-                    "bike": {},
-                    "obstacles": [],
-                    "scores": [
-                        {"id": player[0].id, "score": player[0].score}
-                        for player in players
-                    ],
-                    "run_state": run_state,
-                }
-            serialized_game_state = json.dumps(game_state) + "\n"  # Serialize once
-
-        # Broadcast the same game state to all players
-        async with lock:
-            for _, player_writer in players:
-                try:
-                    player_writer.write(serialized_game_state.encode("utf-8"))
-                    await player_writer.drain()
-                except (ConnectionResetError, BrokenPipeError):
-                    continue
 
 
 async def start_server(host, port):
     """Start the game server."""
-    global obstacles
-    obstacles = game_setup()
-
-    server = await asyncio.start_server(handle_client, host, port)
+    lock = asyncio.Lock()  # Create the lock inside the event loop
+    server = await asyncio.start_server(lambda r, w: handle_client(r, w, lock), host, port)
     print(f"Server started on {host}:{port}")
 
     # Start the game loop
-    asyncio.create_task(game_loop())
+    asyncio.create_task(game_loop(lock))
 
     async with server:
         await server.serve_forever()
 
 
 if __name__ == "__main__":
-    asyncio.run(start_server("0.0.0.0", 38902))
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Game Server")
+    parser.add_argument("--port", type=int, default=38902, help="Port number to run the server on")
+    args = parser.parse_args()
+
+    asyncio.run(start_server("0.0.0.0", args.port))
