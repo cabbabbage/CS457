@@ -13,6 +13,10 @@ import images
 SERVER_WIDTH, SERVER_HEIGHT = 1920, 1080
 SECRET_KEY = b'supersecretkey'
 
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 client_width, client_height = screen.get_size()
@@ -85,10 +89,24 @@ async def join_game(pre_host=None, pre_port=None):
                     input_boxes_no_name[current_focus]["text"] += event.unicode
 
     return input_boxes_no_name["host"]["text"], int(input_boxes_no_name["port"]["text"])
+<<<<<<< Updated upstream
+=======
+
+async def connect_to_server(host, port):
+    print(f"[DEBUG] Connecting to {host}:{port} with SSL...")
+    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    # Make sure 'server.crt' (from the server) is copied to the client's directory
+    ssl_context.load_verify_locations("server.crt")
+    ssl_context.check_hostname = False
+
+    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+    print("[DEBUG] Secure connection established with server.")
+    return reader, writer
+
+>>>>>>> Stashed changes
 async def submit_num_players(writer):
-    """Display a UI for the first player to enter the number of players."""
     input_box = pygame.Rect(client_width // 2 - 150, client_height // 2, 300, 50)
-    input_text = ""  # Initialize input text
+    input_text = ""
 
     while True:
         screen.fill((160, 130, 110))
@@ -103,15 +121,15 @@ async def submit_num_players(writer):
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.MOUSEBUTTONDOWN and close_button.collidepoint(event.pos)):
                 pygame.quit()
-                exit()  # Exit the game entirely
+                exit()
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:  # Submit input
+                if event.key == pygame.K_RETURN:
                     try:
                         num_players = int(input_text.strip())
                         writer.write(json.dumps({"num_players": num_players}).encode("utf-8") + b"\n")
                         await writer.drain()
                         print(f"[DEBUG] Number of players submitted: {num_players}")
-                        return  # Exit after submission
+                        return
                     except ValueError:
                         print("[ERROR] Invalid number entered.")
                 elif event.key == pygame.K_BACKSPACE:
@@ -126,6 +144,7 @@ async def connect_to_server(host, port):
     ssl_context.load_verify_locations("server.crt")
     ssl_context.check_hostname = False
 
+<<<<<<< Updated upstream
     reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
     print("[DEBUG] Secure connection established with server.")
     return reader, writer
@@ -163,6 +182,8 @@ async def submit_num_players(writer):
                 elif len(input_text) < 3:
                     input_text += event.unicode
 
+=======
+>>>>>>> Stashed changes
 async def listen_and_render(reader, writer, id, controller):
     game_over = False
 
