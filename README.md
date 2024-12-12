@@ -9,6 +9,47 @@
 The objective of this project is to utilize **MediaPipe** to detect player controls, transmit the MediaPipe data to a server, update the game logic on the server, and return the game visuals to the user in real-time.
 
 ---
+### Sprint X: Encryption
+
+#### Security Implementations
+This project ensures secure communication between the server and clients using the following measures:
+
+- **TLS Encryption**:
+  - A self-signed SSL certificate and private key encrypt communications. The certificate includes the server's IP in the SAN for client validation.
+
+- **Mutual Authentication**:
+  - Clients authenticate the server using its certificate to ensure communication is secure and free from interception.
+
+- **Game State Encryption**:
+  - Sensitive game data, such as player actions and positions, are encrypted to prevent eavesdropping or manipulation.
+
+---
+
+#### Grading Adjustments
+For simplicity during grading:
+
+- **Pre-Generated Certificates**:
+  - Certificate generation on server startup is disabled. A pre-generated `server.crt` and `server.key` are included to avoid manual setup.
+
+- **Shared Keys**:
+  - This allows the client and server to connect out-of-the-box without additional configuration.
+
+---
+
+#### Ideal Implementation
+In a production setting, the following improvements would be made:
+
+- **Dynamic Key Generation**:
+  - Generate unique certificates and keys on server initialization to enhance security.
+
+- **Mutual TLS**:
+  - Require clients to authenticate themselves using their own certificates.
+
+- **Secure Key Distribution**:
+  - Distribute certificates securely via pre-shared secrets or out-of-band channels.
+
+These measures would create a fully secure, easy to use game, but time did not allow for this type of implementation.
+
 ## Sprint 5: What We Did
 
 ### Key Achievements:
