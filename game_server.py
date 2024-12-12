@@ -1,9 +1,22 @@
 import json
 import asyncio
+import argparse
+import ssl
+import subprocess
+import os
+import socket
+from ipaddress import ip_address
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
+from datetime import datetime, timedelta, timezone
+
 from Tree import Tree
 from Rabbit import Rabbit
 from Bike import Bike
-import argparse
+
 # Global game variables
 num_players = None  # Number of players needed to start the game
 players = []  # List of connected players
@@ -11,13 +24,10 @@ obstacles = []  # List of obstacles
 game_started = False
 run_state = 0  # 0: Waiting for players, 1: Game running, 2: Game over, 3: First player sets num_players
 
-
 def obstacle_reset():
-    
     for obstacle in obstacles:
         obstacle.active = False
         obstacle.rnd_start()
-
 
 def game_setup():
     """Initialize obstacles."""
@@ -27,64 +37,105 @@ def game_setup():
     obs.extend([Rabbit(width, height) for _ in range(4)])
     return obs
 
+def get_server_ip():
+    """Get the server's actual IP address."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+def generate_ssl_certificate(server_ip_str):
+    """Generate a self-signed SSL certificate with the server's IP in the SAN."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    try:
+        ip_addr = ip_address(server_ip_str)
+    except ValueError:
+        print(f"[ERROR] Invalid IP address: {server_ip_str}")
+        return
+
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "MyState"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, "MyCity"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "MyOrganization"),
+        x509.NameAttribute(NameOID.COMMON_NAME, server_ip_str),
+    ])
+
+    # Use timezone-aware current time
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + timedelta(days=365))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(ip_addr)]),
+            critical=False
+        ).sign(key, hashes.SHA256()))
+
+    with open("server.key", "wb") as f:
+        f.write(key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=NoEncryption()
+        ))
+
+    with open("server.crt", "wb") as f:
+        f.write(cert.public_bytes(Encoding.PEM))
 
 async def handle_client(reader, writer, lock):
     global players, num_players, run_state, obstacles
+    addr = writer.get_extra_info('peername')
 
     width, height = 1920, 1080
-    addr = writer.get_extra_info('peername')  # Get client address
-
-    # Create a new bike for the player
     player_bike = Bike(width, height, reader, addr)
 
     async with lock:
-        players.append((player_bike, writer))  # Store player and writer as a tuple
+        players.append((player_bike, writer))
         player_bike.id = len(players)
         print(f"[DEBUG] New player connected. Total players: {len(players)}")
 
-        # If this is the first player, set run_state = 3 and request num_players
         if len(players) == 1:
             run_state = 3
             try:
-                # Send run_state = 3 to the first player
                 msg = {"run_state": 3, "your_id": player_bike.id}
                 print(f"[DEBUG] Sending to first client: {msg}")
                 writer.write(json.dumps(msg).encode("utf-8") + b"\n")
                 await writer.drain()
 
-                # Wait for the first client to provide the number of players
                 raw_data = await reader.readuntil(b'\n')
                 data = json.loads(raw_data.decode("utf-8"))
-                num_players = data.get("num_players", 2)  # Default to 2 if not specified
+                num_players_val = data.get("num_players", 2)
+                num_players = num_players_val
                 print(f"[DEBUG] Number of players set to: {num_players}")
 
-                # Initialize obstacles after receiving num_players
-                obstacles = game_setup()
-                run_state = 0  # Transition to waiting for more players
+                obstacles[:] = game_setup()
+                run_state = 0
             except (ConnectionResetError, json.JSONDecodeError):
                 print(f"[DEBUG] Player {player_bike.id} disconnected during initial setup.")
                 players.remove((player_bike, writer))
                 writer.close()
                 await writer.wait_closed()
                 return
-
-        # If not the first player, send current run_state (likely 0: Waiting for players)
         else:
             msg = {"run_state": run_state, "your_id": player_bike.id}
             print(f"[DEBUG] Sending to new client: {msg}")
             writer.write(json.dumps(msg).encode("utf-8") + b"\n")
             await writer.drain()
 
-    asyncio.create_task(player_bike.read_from_client())  # Read input asynchronously
+    asyncio.create_task(player_bike.read_from_client())
 
     try:
-        # Keep the connection open
         while True:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
         pass
     finally:
-        # Clean up when client disconnects
         async with lock:
             if (player_bike, writer) in players:
                 players.remove((player_bike, writer))
@@ -92,115 +143,102 @@ async def handle_client(reader, writer, lock):
         writer.close()
         await writer.wait_closed()
 
-
 async def game_loop(lock):
-    global players, obstacles, run_state, game_started
-
+    global players, obstacles, run_state, game_started, num_players
     while True:
-        await asyncio.sleep(0.05)  # Game loop frequency
+        await asyncio.sleep(0.05)
 
         async with lock:
-            # Wait for num_players to be set by the first client
             if num_players is None or len(players) < num_players:
-                run_state = 0  # Waiting for players
+                run_state = 0
             elif not game_started:
-                run_state = 1  # Game running
+                run_state = 1
                 game_started = True
                 print("[DEBUG] Game started.")
 
-            # Broadcast game state (including run_state) to all clients
             game_state = {
                 "run_state": run_state,
                 "players": [
                     {
-                        "id": player_bike.id,
-                        "position": {"x": player_bike.x, "y": player_bike.y},
-                        "score": player_bike.score,
-                        "active": player_bike.active,
+                        "id": pb.id,
+                        "position": {"x": pb.x, "y": pb.y},
+                        "score": pb.score,
+                        "active": pb.active,
                     }
-                    for player_bike, _ in players
+                    for pb, _ in players
                 ],
                 "obstacles": [
-                    {"type": obstacle.type, "position": {"x": obstacle.x, "y": obstacle.y}}
-                    for obstacle in obstacles if obstacle.active
-                ] if game_started else [],  # Only include obstacles during the game
+                    {"type": obs.type, "position": {"x": obs.x, "y": obs.y}}
+                    for obs in obstacles if obs.active
+                ] if game_started else [],
             }
             serialized_game_state = json.dumps(game_state) + "\n"
 
-            # Create a list of players to remove in case of exceptions
             disconnected_players = []
-
-            for player_bike, writer in players:
+            for pb, w in players:
                 try:
-                    writer.write(serialized_game_state.encode("utf-8"))
-                    await writer.drain()
+                    w.write(serialized_game_state.encode("utf-8"))
+                    await w.drain()
                 except (ConnectionResetError, BrokenPipeError):
-                    print(f"[DEBUG] Player {player_bike.id} disconnected during game state update.")
-                    disconnected_players.append((player_bike, writer))
+                    print(f"[DEBUG] Player {pb.id} disconnected during game state update.")
+                    disconnected_players.append((pb, w))
 
-            # Remove disconnected players
-            for player in disconnected_players:
-                players.remove(player)
-                print(f"[DEBUG] Removed player {player[0].id}. Total players: {len(players)}")
+            for dp in disconnected_players:
+                players.remove(dp)
+                print(f"[DEBUG] Removed player {dp[0].id}. Total players: {len(players)}")
 
-        if run_state == 1:  # Game running
-            # Update obstacles
-            for obstacle in obstacles:
-                if not obstacle.active:
-                    obstacle.activate()
+        if run_state == 1:
+            for obs in obstacles:
+                if not obs.active:
+                    obs.activate()
                     break
-                obstacle.update()
+                obs.update()
 
-            for player_bike, _ in players:
-                if player_bike.active:
-                    player_bike.score += 0.1  # Increment score per frame or tick
-
-                for obstacle in obstacles:
-                    if obstacle.active and (
-                        player_bike.hitbox_right > obstacle.hitbox_left
-                        and player_bike.hitbox_left < obstacle.hitbox_right
-                        and player_bike.hitbox_bottom > obstacle.hitbox_top
-                        and player_bike.hitbox_top < obstacle.hitbox_bottom
+            for pb, _ in players:
+                if pb.active:
+                    pb.score += 0.1
+                for obs in obstacles:
+                    if obs.active and (
+                        pb.hitbox_right > obs.hitbox_left and
+                        pb.hitbox_left < obs.hitbox_right and
+                        pb.hitbox_bottom > obs.hitbox_top and
+                        pb.hitbox_top < obs.hitbox_bottom
                     ):
-                        print(f"[DEBUG] Collision detected for player {player_bike.id}.")
-                        player_bike.active = False  # Handle collision
-                        # Check if all players are inactive
+                        print(f"[DEBUG] Collision detected for player {pb.id}.")
+                        pb.active = False
                         if all(not p[0].active for p in players):
-                            run_state = 2  # Game Over
-                        break  # Exit obstacle loop
-
-        elif run_state == 2:  # Game over
+                            run_state = 2
+                        break
+        elif run_state == 2:
             print("[DEBUG] Game over. Displaying results.")
-            await asyncio.sleep(10)  # Allow clients to display game over screen
+            await asyncio.sleep(10)
             run_state = 0
             game_started = False
             obstacle_reset()
-
-            # Reset player states
-            for player_bike, _ in players:
-                player_bike.active = True
-                player_bike.score = 0
-
-
+            for pb, _ in players:
+                pb.active = True
+                pb.score = 0
 
 async def start_server(host, port):
-    """Start the game server."""
-    lock = asyncio.Lock()  # Create the lock inside the event loop
-    server = await asyncio.start_server(lambda r, w: handle_client(r, w, lock), host, port)
-    print(f"Server started on {host}:{port}")
+    lock = asyncio.Lock()
+    # Create SSL context
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_context.load_cert_chain(certfile="server.crt", keyfile="server.key")
 
-    # Start the game loop
+    server = await asyncio.start_server(lambda r, w: handle_client(r, w, lock), host, port, ssl=ssl_context)
+    print(f"Server started on {host}:{port} with SSL")
+
     asyncio.create_task(game_loop(lock))
 
     async with server:
         await server.serve_forever()
 
-
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Game Server")
     parser.add_argument("--port", type=int, default=38902, help="Port number to run the server on")
     args = parser.parse_args()
 
-    asyncio.run(start_server("0.0.0.0", args.port))
+    server_ip = get_server_ip()
+    print(f"[DEBUG] Using server IP: {server_ip}")
+    #generate_ssl_certificate(server_ip)  # uncomment to gnerate a new key
+    asyncio.run(start_server(server_ip, args.port))
